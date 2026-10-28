@@ -342,10 +342,14 @@ input[type="color"] { width: 30px; height: 30px; padding: 0; border: 1px solid v
 .empty-state { text-align: center; padding: 54px 20px; color: var(--txt-3); }
 .empty-state b { display: block; color: var(--txt-2); font-size: 15px; margin-bottom: 5px; font-weight: 600; }
 .banner {
-  display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
-  padding: 11px 14px; border-radius: 12px; font-size: 13px;
-  background: rgba(255, 176, 32, .12); border: 1px solid rgba(255, 176, 32, .3); color: #ffc457;
+  display: flex; align-items: center; gap: 12px; margin-bottom: 14px;
+  padding: 11px 14px 11px 16px; border-radius: 999px; font-size: 13px;
+  background: rgba(232, 178, 58, .12); border: 1px solid rgba(232, 178, 58, .32); color: #e8b23a;
 }
+.banner.ok {
+  background: rgba(85, 211, 150, .12); border-color: rgba(85, 211, 150, .34); color: var(--accent);
+}
+.banner .btn { margin-left: auto; padding: 6px 14px; }
 .tip {
   position: fixed; z-index: 50; pointer-events: none;
   background: #000c; backdrop-filter: blur(8px);

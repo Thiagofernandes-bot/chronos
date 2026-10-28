@@ -35,9 +35,36 @@ const S = {
   stats: null,
   settings: null,
   live: null,
+  update: null,
   open: {},
   confirmClear: false
 };
+
+const UPDATE_TXT = {
+  dev: 'modo desenvolvimento — atualização automática desligada',
+  idle: 'ainda não verifiquei',
+  checking: 'procurando atualizações…',
+  latest: 'você está na versão mais recente',
+  error: 'não consegui verificar agora'
+};
+
+function updateLine() {
+  const u = S.update;
+  if (!u) return '';
+  if (u.status === 'downloading') {
+    return 'baixando a versão ' + (u.version || '') + '… ' + (u.percent || 0) + '%';
+  }
+  if (u.status === 'ready') return 'versão ' + (u.version || '') + ' pronta — reinicie para aplicar';
+  if (u.status === 'error') return UPDATE_TXT.error + (u.error ? ': ' + u.error : '');
+  return UPDATE_TXT[u.status] || '';
+}
+
+function updateBanner() {
+  const u = S.update;
+  if (!u || u.status !== 'ready') return '';
+  return '<div class="banner ok"><b>Chronos ' + esc(u.version) + ' pronto para instalar</b>'
+    + '<button class="btn primary" data-act="update-install">Reiniciar e atualizar</button></div>';
+}
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -547,8 +574,17 @@ function viewSet() {
     + sw('siteIcons', s.siteIcons) + '</div>'
     + '<div class="set-row"><div><p>Tema</p><small>escuro ou claro</small></div>'
     + '<select data-set="theme">' + opt('dark', 'Escuro', s.theme) + opt('light', 'Claro', s.theme) + '</select></div>'
-    + '<div class="set-row"><div><p>Versão</p><small>Chronos 1.0 · dados só no seu PC</small></div>'
-    + '<button class="btn" data-act="open-data">Abrir pasta de dados</button></div>'
+    + '<div class="set-row"><div><p>Pasta de dados</p><small>tudo fica em %APPDATA%\\Chronos</small></div>'
+    + '<button class="btn" data-act="open-data">Abrir pasta</button></div>'
+    + '</div></div></div>'
+
+    + '<div class="card mt"><div class="card-h"><h2>ATUALIZAÇÕES</h2>'
+    + '<span class="hint">versão instalada: ' + esc((S.update && S.update.current) || '—') + '</span></div>'
+    + '<div class="set"><div class="set-row"><div><p>Atualização automática</p>'
+    + '<small>' + esc(updateLine()) + '</small></div>'
+    + (S.update && S.update.status === 'ready'
+      ? '<button class="btn primary" data-act="update-install">Reiniciar e atualizar</button>'
+      : '<button class="btn" data-act="update-check">Procurar atualizações</button>')
     + '</div></div></div>'
 
     + '<div class="card mt"><div class="card-h"><h2>DADOS</h2></div><div class="set">'
@@ -614,7 +650,7 @@ function renderNow() {
 function renderView() {
   if (!S.stats || !S.settings) return;
   const map = { hoje: viewHoje, apps: viewApps, sites: viewSites, cats: viewCats, hist: viewHist, set: viewSet };
-  $('#view').innerHTML = map[S.page]();
+  $('#view').innerHTML = updateBanner() + map[S.page]();
 }
 
 function render() {
@@ -740,6 +776,12 @@ document.addEventListener('click', async (ev) => {
       document.documentElement.dataset.theme = next;
       render();
     }
+    if (what === 'update-check') {
+      S.update = await api.updateCheck();
+      renderView();
+      toast('Procurando atualizações…');
+    }
+    if (what === 'update-install') await api.updateInstall();
     if (what === 'open-data') api.openData();
     if (what === 'export') {
       const r = S.page === 'hist'
@@ -818,7 +860,14 @@ document.addEventListener('mousemove', (ev) => {
   S.settings = await api.getSettings();
   document.documentElement.dataset.theme = S.settings.theme === 'light' ? 'light' : 'dark';
   S.live = await api.live();
+  S.update = await api.updateState();
   await load();
+
+  api.onUpdate((data) => {
+    const antes = S.update && S.update.status;
+    S.update = data;
+    if (data.status !== antes || S.page === 'set') renderView();
+  });
 
   api.onLive((data) => {
     const was = S.live;
