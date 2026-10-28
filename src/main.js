@@ -500,7 +500,9 @@ function registerIpc() {
     stopProbe();
     tracker.flush();
     store.flush();
-    autoUpdater.quitAndInstall();
+    // (silencioso, reabre depois): sem isso o instalador aparece na tela e o
+    // app fica fechado no fim.
+    autoUpdater.quitAndInstall(true, true);
     return true;
   });
 

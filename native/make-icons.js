@@ -56,7 +56,9 @@ function shade(x, y) {
   const dx = x - 0.5;
   const dy = y - 0.5;
   const raio = Math.hypot(dx, dy);
-  if (raio > 0.30) return preto;
+  // Disco grande de proposito: o fundo preto do icone encosta no fundo preto
+  // do app, entao quem tem que carregar a leitura e o verde.
+  if (raio > 0.385) return preto;
 
   // Ângulo a partir das 12 horas, crescendo no sentido do relógio.
   let ang = Math.atan2(dy, dx) + Math.PI / 2;
