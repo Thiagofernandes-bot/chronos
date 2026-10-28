@@ -138,8 +138,44 @@ function png(size) {
   ]);
 }
 
+// Bitmap clássico (DIB) de um tamanho, do jeito que o shell do Windows espera.
+// PNG dentro de .ico só vale para 256x256: nos tamanhos pequenos o
+// SHGetFileInfo não lê e o Windows devolve o ícone genérico no lugar.
+function dib(size) {
+  const px = raster(size);
+
+  const cabecalho = Buffer.alloc(40);
+  cabecalho.writeUInt32LE(40, 0);            // biSize
+  cabecalho.writeInt32LE(size, 4);           // biWidth
+  cabecalho.writeInt32LE(size * 2, 8);       // biHeight (cor + máscara)
+  cabecalho.writeUInt16LE(1, 12);            // biPlanes
+  cabecalho.writeUInt16LE(32, 14);           // biBitCount
+  cabecalho.writeUInt32LE(0, 16);            // biCompression = BI_RGB
+
+  // Cor em BGRA, de baixo para cima.
+  const cor = Buffer.alloc(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    const origem = (size - 1 - y) * size * 4;
+    for (let x = 0; x < size; x++) {
+      const o = origem + x * 4;
+      const d = (y * size + x) * 4;
+      cor[d] = px[o + 2];
+      cor[d + 1] = px[o + 1];
+      cor[d + 2] = px[o];
+      cor[d + 3] = px[o + 3];
+    }
+  }
+
+  // Máscara AND zerada: a transparência real vem do canal alfa.
+  const bytesPorLinha = ((size + 31) >> 5) * 4;
+  const mascara = Buffer.alloc(bytesPorLinha * size);
+
+  cabecalho.writeUInt32LE(cor.length + mascara.length, 20); // biSizeImage
+  return Buffer.concat([cabecalho, cor, mascara]);
+}
+
 function ico(sizes) {
-  const images = sizes.map((s) => ({ size: s, data: png(s) }));
+  const images = sizes.map((s) => ({ size: s, data: s >= 256 ? png(s) : dib(s) }));
   const header = Buffer.alloc(6);
   header.writeUInt16LE(0, 0);
   header.writeUInt16LE(1, 2);
