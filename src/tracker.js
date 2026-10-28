@@ -1,6 +1,7 @@
 'use strict';
 
 const { EventEmitter } = require('events');
+const { ehRuido } = require('./ruido');
 
 const BROWSERS = new Set(['chrome', 'msedge', 'brave', 'firefox', 'opera', 'opera_gx',
   'vivaldi', 'chromium', 'iexplore', 'arc']);
@@ -56,13 +57,18 @@ class Tracker extends EventEmitter {
   feed(sample) {
     if (this.paused) return;
     const ts = sample.ts || Date.now();
+    const idle = (sample.idle || 0) * 1000 >= this.idleAfter;
+
+    // Peça do shell em primeiro plano (Alt+Tab, bandeja, área de trabalho) não
+    // é uso de nada: descarta a amostra e deixa o bloco atual de pé, para uma
+    // passada pelo Alt+Tab não picar a sessão no meio.
+    if (!idle && ehRuido(sample.exe, sample.title)) return;
 
     // Buraco grande entre amostras (suspensao, probe reiniciado): encerra o
     // segmento no ultimo instante visto em vez de inventar tempo.
     if (this.lastTs && ts - this.lastTs > this.interval * 3) this.close(this.lastTs);
     this.lastTs = ts;
 
-    const idle = (sample.idle || 0) * 1000 >= this.idleAfter;
     let seg;
 
     if (idle || !sample.exe) {

@@ -2,7 +2,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const { DEFAULT_CATEGORIES, OTHER, LEGACY_COLORS, classify, categoryMap } = require('./categories');
+const { DEFAULT_CATEGORIES, OTHER, LEGACY_COLORS, classify, categoryMap, chaveDoItem } = require('./categories');
+const { ehRuido, nomeApp, tituloLimpo } = require('./ruido');
 
 const DEFAULT_SETTINGS = {
   interval: 2000,          // ms entre amostras
@@ -12,6 +13,8 @@ const DEFAULT_SETTINGS = {
   startMinimized: true,
   closeToTray: true,
   theme: 'dark',
+  minSegundos: 30,         // esconde do relatorio o que somou menos que isso
+  atribuicoes: {},         // app/site -> categoria escolhida pelo usuario
   siteIcons: false,        // buscar favicon dos sites (unico acesso a internet)
   focusGoalMin: 300,       // meta diaria de tempo produtivo, em minutos
   productive: ['trabalho', 'estudo'],
@@ -193,6 +196,7 @@ class Store {
 
   aggregate(fromKey, toKey) {
     const cats = this.settings.categories;
+    const atrib = this.settings.atribuicoes || {};
     const catInfo = categoryMap(cats);
     const segs = this.readRange(fromKey, toKey);
     const keys = rangeKeys(fromKey, toKey);
@@ -215,9 +219,14 @@ class Store {
       if (!ms) continue;
 
       if (seg.idle) { idleMs += ms; continue; }
+      // Registro antigo de janela do shell: some na leitura, do mesmo jeito
+      // que hoje ele nem chega a ser gravado.
+      if (ehRuido(seg.exe, seg.title)) continue;
       activeMs += ms;
 
-      const cat = classify(seg, cats);
+      const app = nomeApp(seg.app, seg.exe);
+      const title = seg.browser ? (seg.title || '') : tituloLimpo(seg.title, app, seg.exe);
+      const cat = classify(seg, cats, atrib);
       byCat.set(cat, (byCat.get(cat) || 0) + ms);
 
       const dk = dateKey(seg.s);
@@ -236,16 +245,16 @@ class Store {
         cur += slice;
       }
 
-      const appKey = (seg.app || seg.exe || '?') + '\u0001' + (seg.exe || '');
-      let app = byApp.get(appKey);
-      if (!app) {
-        app = { app: seg.app || seg.exe || '?', exe: seg.exe, ms: 0, cat, browser: !!seg.browser, titles: new Map() };
-        byApp.set(appKey, app);
+      const appKey = app + '\u0001' + (seg.exe || '');
+      let appAgg = byApp.get(appKey);
+      if (!appAgg) {
+        appAgg = { app, exe: seg.exe, ms: 0, cat, browser: !!seg.browser, titles: new Map() };
+        byApp.set(appKey, appAgg);
       }
-      app.ms += ms;
-      if (seg.browser) app.browser = true;
-      const label = seg.dom ? seg.dom + (seg.title ? ' · ' + seg.title : '') : (seg.title || '(sem título)');
-      app.titles.set(label, (app.titles.get(label) || 0) + ms);
+      appAgg.ms += ms;
+      if (seg.browser) appAgg.browser = true;
+      const label = seg.dom ? seg.dom + (title ? ' · ' + title : '') : (title || '(sem título)');
+      appAgg.titles.set(label, (appAgg.titles.get(label) || 0) + ms);
 
       if (seg.dom) {
         let site = bySite.get(seg.dom);
@@ -254,13 +263,19 @@ class Store {
           bySite.set(seg.dom, site);
         }
         site.ms += ms;
-        const tab = seg.title || seg.url || seg.dom;
+        const tab = title || seg.url || seg.dom;
         site.tabs.set(tab, (site.tabs.get(tab) || 0) + ms);
       }
     }
 
+    // Piso de duração: o que somou poucos segundos no período é ruído de
+    // passagem (diálogo aberto por engano, janela que piscou) e não ajuda a
+    // medir nada. O tempo continua no total do dia; só não vira linha.
+    const minMs = Math.max(0, (this.settings.minSegundos || 0) * 1000);
+
     const topList = (map, limit) => Array.from(map.entries())
       .map(([title, ms]) => ({ title, ms }))
+      .filter((t) => t.ms >= minMs)
       .sort((a, b) => b.ms - a.ms)
       .slice(0, limit);
 
@@ -271,7 +286,7 @@ class Store {
       })
       .sort((a, b) => b.ms - a.ms);
 
-    const apps = Array.from(byApp.values())
+    const appsTodos = Array.from(byApp.values())
       .map((a) => ({
         app: a.app, exe: a.exe, ms: a.ms, cat: a.cat, browser: a.browser,
         // O navegador em si nao tem categoria: o tempo dele se divide entre
@@ -281,13 +296,42 @@ class Store {
       }))
       .sort((a, b) => b.ms - a.ms);
 
-    const sites = Array.from(bySite.values())
+    const sitesTodos = Array.from(bySite.values())
       .map((s) => ({
         dom: s.dom, ms: s.ms, cat: s.cat,
         color: (catInfo[s.cat] || OTHER).color,
         tabs: topList(s.tabs, 14)
       }))
       .sort((a, b) => b.ms - a.ms);
+
+    const apps = appsTodos.filter((a) => a.ms >= minMs);
+    const sites = sitesTodos.filter((s) => s.ms >= minMs);
+
+    // Lista para a tela de Categorias: cada app e cada site que apareceu de
+    // verdade, com a categoria atual e se ela veio de escolha do usuário.
+    const itens = [];
+    for (const a of apps) {
+      if (a.browser) continue; // o navegador em si não se classifica: quem vale é o site
+      const chave = 'app:' + String(a.exe || a.app).toLowerCase();
+      itens.push({
+        tipo: 'app', chave, nome: a.app, exe: a.exe,
+        ms: a.ms, cat: a.cat, explicito: !!atrib[chave]
+      });
+    }
+    for (const s of sites) {
+      const chave = 'site:' + s.dom;
+      itens.push({
+        tipo: 'site', chave, nome: s.dom, dom: s.dom,
+        ms: s.ms, cat: s.cat, explicito: !!atrib[chave]
+      });
+    }
+    itens.sort((a, b) => b.ms - a.ms);
+    const ocultos = {
+      minSegundos: Math.round(minMs / 1000),
+      apps: appsTodos.length - apps.length,
+      sites: sitesTodos.length - sites.length,
+      ms: appsTodos.filter((a) => a.ms < minMs).reduce((t, a) => t + a.ms, 0)
+    };
 
     const productive = new Set(this.settings.productive || []);
     let productiveMs = 0;
@@ -296,32 +340,35 @@ class Store {
     const result = {
       from: fromKey, to: toKey, days: keys.length,
       activeMs, idleMs, productiveMs,
-      categories, apps, sites, hours,
+      categories, apps, sites, hours, ocultos, itens,
       byDay: Array.from(byDay.values()),
       catInfo,
-      timeline: single ? this.buildTimeline(segs, cats, catInfo) : []
+      timeline: single ? this.buildTimeline(segs, cats, catInfo, atrib) : []
     };
     return result;
   }
 
   // Junta segmentos vizinhos do mesmo app numa faixa unica, para a linha do
   // tempo nao virar mil tracinhos de um pixel.
-  buildTimeline(segs, cats, catInfo) {
-    const sorted = segs.filter((s) => !s.idle).sort((a, b) => a.s - b.s);
+  buildTimeline(segs, cats, catInfo, atrib) {
+    const sorted = segs
+      .filter((s) => !s.idle && !ehRuido(s.exe, s.title))
+      .sort((a, b) => a.s - b.s);
     const out = [];
     for (const seg of sorted) {
-      const cat = classify(seg, cats);
+      const nome = nomeApp(seg.app, seg.exe);
+      const cat = classify(seg, cats, atrib);
       const last = out[out.length - 1];
-      if (last && last.app === (seg.app || seg.exe) && last.cat === cat && seg.s - last.e < 60000) {
+      if (last && last.app === nome && last.cat === cat && seg.s - last.e < 60000) {
         last.e = Math.max(last.e, seg.e);
         if (seg.dom && !last.dom) last.dom = seg.dom;
         continue;
       }
       out.push({
         s: seg.s, e: seg.e,
-        app: seg.app || seg.exe,
+        app: nome,
         dom: seg.dom || null,
-        title: seg.title || '',
+        title: seg.browser ? (seg.title || '') : tituloLimpo(seg.title, nome, seg.exe),
         cat,
         color: (catInfo[cat] || OTHER).color
       });
@@ -332,14 +379,15 @@ class Store {
   exportCsv(fromKey, toKey) {
     const segs = this.readRange(fromKey, toKey).sort((a, b) => a.s - b.s);
     const cats = this.settings.categories;
+    const atrib = this.settings.atribuicoes || {};
     const rows = ['inicio;fim;minutos;categoria;app;executavel;site;titulo'];
     for (const s of segs) {
       const min = ((s.e - s.s) / 60000).toFixed(2).replace('.', ',');
-      const cat = s.idle ? 'ausente' : classify(s, cats);
+      const cat = s.idle ? 'ausente' : classify(s, cats, atrib);
       rows.push([
         new Date(s.s).toLocaleString('pt-BR'),
         new Date(s.e).toLocaleString('pt-BR'),
-        min, cat, s.idle ? 'Ausente' : (s.app || ''), s.exe || '', s.dom || '',
+        min, cat, s.idle ? 'Ausente' : nomeApp(s.app, s.exe), s.exe || '', s.dom || '',
         (s.title || '').replace(/[;\r\n]/g, ' ')
       ].join(';'));
     }

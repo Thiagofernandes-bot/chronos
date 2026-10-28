@@ -352,6 +352,29 @@ input[type="color"] { width: 30px; height: 30px; padding: 0; border: 1px solid v
 .btn.danger { color: #ff6b6b; border-color: rgba(255, 107, 107, .35); }
 .btn.danger:hover { background: rgba(255, 107, 107, .1); }
 
+/* ---------------------------------------------- classificar app por app */
+.class-lista { display: flex; flex-direction: column; }
+.class-item {
+  display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 12px;
+  padding: 10px 8px; border-radius: 10px;
+}
+.class-item + .class-item { border-top: 1px solid var(--line); }
+.class-item:hover { background: var(--card-soft); }
+.class-item select { min-width: 150px; border-radius: 999px; padding: 7px 14px; font-size: 12.5px; }
+.class-item .row-sub em { font-style: normal; }
+/* quem ainda não tem categoria ganha um traço na lateral para pedir atenção */
+.class-item.sem { box-shadow: inset 3px 0 0 var(--accent); }
+
+.regras-auto { margin-top: 12px; }
+.regras-auto summary {
+  cursor: pointer; font-size: 12px; color: var(--txt-3);
+  list-style: none; padding: 4px 0;
+}
+.regras-auto summary::-webkit-details-marker { display: none; }
+.regras-auto summary::before { content: "▸ "; }
+.regras-auto[open] summary::before { content: "▾ "; }
+.regras-auto summary:hover { color: var(--txt-2); }
+
 /* ------------------------------------------------------------ categorias */
 .cat-edit { display: flex; flex-direction: column; gap: 10px; }
 .cat-box { border: 1px solid var(--line); border-radius: 13px; padding: 13px; background: var(--card-soft); }

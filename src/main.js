@@ -126,6 +126,58 @@ function pushLive() {
 // Fica em memoria porque a extracao e barata e o caminho pode mudar.
 const iconCache = {};
 
+// Quando o Windows não consegue ler o ícone de um .exe ele devolve o ícone
+// genérico em vez de falhar. Guardamos como ele é (pedindo o ícone de um
+// arquivo que não existe) para reconhecer e procurar o logo em outro lugar.
+let iconeGenerico = null;
+
+async function assinaturaDoIconeGenerico() {
+  if (iconeGenerico !== null) return iconeGenerico;
+  try {
+    const falso = path.join(app.getPath('temp'), '__chronos_sem_icone__.exe');
+    const img = await app.getFileIcon(falso, { size: 'large' });
+    iconeGenerico = img && !img.isEmpty() ? img.toDataURL() : '';
+  } catch (e) {
+    iconeGenerico = '';
+  }
+  return iconeGenerico;
+}
+
+// App da Microsoft Store: o ícone de verdade é um PNG dentro do pacote.
+function iconeDePacoteDaStore(exePath) {
+  if (!/\\WindowsApps\\/i.test(exePath)) return null;
+  const raiz = (exePath.match(/^(.*\\WindowsApps\\[^\\]+)\\/i) || [])[1];
+  const pastaExe = path.dirname(exePath);
+  const procurar = [raiz, raiz && path.join(raiz, 'Assets'), raiz && path.join(raiz, 'images'),
+    pastaExe, path.join(pastaExe, 'Assets'), path.join(pastaExe, 'images')].filter(Boolean);
+
+  const achados = [];
+  for (const dir of procurar) {
+    let arquivos = [];
+    try { arquivos = fs.readdirSync(dir); } catch (e) { continue; }
+    for (const nome of arquivos) {
+      if (!/\.png$/i.test(nome) || /contrast/i.test(nome)) continue;
+      if (!/(square44x44logo|square71x71logo|square150x150logo|storelogo)/i.test(nome)) continue;
+      const alvo = path.join(dir, nome);
+      try {
+        achados.push({
+          alvo,
+          tamanho: fs.statSync(alvo).size,
+          preferido: /square44x44/i.test(nome) ? 0 : 1
+        });
+      } catch (e) { /* ignora */ }
+    }
+  }
+  if (!achados.length) return null;
+
+  achados.sort((a, b) => a.preferido - b.preferido || b.tamanho - a.tamanho);
+  try {
+    const img = nativeImage.createFromPath(achados[0].alvo);
+    if (img && !img.isEmpty()) return img.resize({ width: 48, height: 48 }).toDataURL();
+  } catch (e) { /* ignora */ }
+  return null;
+}
+
 async function iconFor(exe) {
   const key = (exe || '').toLowerCase();
   if (!key) return null;
@@ -133,13 +185,21 @@ async function iconFor(exe) {
 
   const exePath = store.apps[key];
   if (!exePath || !fs.existsSync(exePath)) { iconCache[key] = null; return null; }
+
+  let data = null;
   try {
     const img = await app.getFileIcon(exePath, { size: 'large' });
-    iconCache[key] = img && !img.isEmpty() ? img.toDataURL() : null;
+    data = img && !img.isEmpty() ? img.toDataURL() : null;
   } catch (e) {
-    iconCache[key] = null;
+    data = null;
   }
-  return iconCache[key];
+
+  const generico = await assinaturaDoIconeGenerico();
+  if (data && generico && data === generico) data = null;
+  if (!data) data = iconeDePacoteDaStore(exePath);
+
+  iconCache[key] = data;
+  return data;
 }
 
 async function iconsFor(list) {
@@ -481,6 +541,14 @@ async function screenshotRun(dir) {
     await wait(500);
     await shot('hoje-fim');
 
+    await go('cats');
+    await run('document.querySelector("#view").scrollTop = 760');
+    await wait(500);
+    await shot('cats-meio');
+    await run('document.querySelector("#view").scrollTop = 99999');
+    await wait(500);
+    await shot('cats-fim');
+
     await go('apps');
     await run('document.querySelector(".row").click()');
     await wait(600);
@@ -527,7 +595,9 @@ function registerIpc() {
       try { win.setTitleBarOverlay(overlayColors()); } catch (err) { /* ignora */ }
     }
     if (intervalChanged) restartProbe();
-    if ('categories' in patch) { store.cache.clear(); liveCache.at = 0; }
+    if ('categories' in patch || 'atribuicoes' in patch || 'minSegundos' in patch) {
+      liveCache.at = 0;
+    }
     return store.settings;
   });
 

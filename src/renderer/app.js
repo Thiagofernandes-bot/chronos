@@ -309,6 +309,18 @@ function rankRows(items, kind) {
   return html + '</div>';
 }
 
+// Nada é apagado em silêncio: o que ficou de fora do relatório é dito.
+function notaOcultos(st) {
+  const o = st.ocultos;
+  if (!o || (!o.apps && !o.sites)) return '';
+  const partes = [];
+  if (o.apps) partes.push(o.apps + (o.apps === 1 ? ' aplicativo' : ' aplicativos'));
+  if (o.sites) partes.push(o.sites + (o.sites === 1 ? ' site' : ' sites'));
+  return '<p class="cap">' + partes.join(' e ') + ' de passagem (menos de '
+    + o.minSegundos + 's, ' + fmt(o.ms) + ' no total) ficaram de fora. '
+    + 'O limite está em Ajustes.</p>';
+}
+
 function emptyState(msg) {
   return '<div class="card"><div class="empty-state"><b>Nada por aqui ainda</b>' + esc(msg) + '</div></div>';
 }
@@ -368,7 +380,7 @@ function viewHoje() {
 
   html += '<div class="sec"><div class="sec-h"><h2>Mais usados</h2>'
     + '<span>apps e sites na mesma lista</span></div>'
-    + rankRows(mixTop(st), 'app') + '</div>';
+    + rankRows(mixTop(st), 'app') + notaOcultos(st) + '</div>';
 
   return html;
 }
@@ -427,7 +439,8 @@ function viewApps() {
   if (!st.apps.length) return emptyState('Nenhum aplicativo registrado neste período.');
   return '<div class="sec-h"><h2>Aplicativos</h2>'
     + '<span>' + st.apps.length + ' no período · clique para ver as janelas</span></div>'
-    + rankRows(st.apps, 'app');
+    + rankRows(st.apps, 'app')
+    + notaOcultos(st);
 }
 
 function viewSites() {
@@ -470,8 +483,13 @@ function viewCats() {
       : '<span style="color:var(--txt-3)">Sem dados no período.</span>')
     + '</div></div></div>';
 
-  html += '<div class="sec"><div class="sec-h"><h2>Regras</h2>'
-    + '<span>o site manda mais que o app: 2h de YouTube não são 2h de Chrome</span></div>'
+  html += listaParaClassificar(st, 'app', 'Seus aplicativos',
+    'cada um conta na categoria que você escolher aqui');
+  html += listaParaClassificar(st, 'site', 'Sites',
+    'o que você faz dentro do navegador conta por aqui, não como “Chrome”');
+
+  html += '<div class="sec"><div class="sec-h"><h2>Categorias</h2>'
+    + '<span>crie as suas e marque o que conta como produtivo</span></div>'
     + '<div class="cat-edit">';
 
   for (const c of cats) {
@@ -483,9 +501,11 @@ function viewCats() {
       + '<span class="sw' + (prod.has(c.id) ? ' on' : '') + '" data-cat-prod="' + esc(c.id) + '"></span> produtivo</label>'
       + '<button class="btn danger" data-cat-del="' + esc(c.id) + '">Remover</button>'
       + '</div>'
+      + '<details class="regras-auto"><summary>regras automáticas</summary>'
       + '<div class="chip-lab">Sites</div>' + chips(c.id, 'domains', c.domains || [])
       + '<div class="chip-lab">Aplicativos</div>' + chips(c.id, 'apps', c.apps || [])
       + '<div class="chip-lab">Títulos de janela</div>' + chips(c.id, 'titles', c.titles || [])
+      + '</details>'
       + '</div>';
   }
 
@@ -502,6 +522,48 @@ function goalNote(feitoMs, metaMs) {
   const falta = metaMs - feitoMs;
   if (falta <= 0) return 'meta batida — ' + fmt(-falta) + ' além';
   return 'faltam ' + fmt(falta);
+}
+
+// A lista que substitui o preenchimento de regras na mão: o que você usou,
+// com ícone e tempo, e um seletor de categoria em cada linha.
+function listaParaClassificar(st, tipo, titulo, explicacao) {
+  const itens = (st.itens || []).filter((i) => i.tipo === tipo);
+  if (!itens.length) return '';
+
+  // Quem ainda não tem categoria sobe: é o que pede decisão.
+  const ordenados = itens.slice().sort((a, b) => {
+    const semA = a.cat === 'outros' ? 0 : 1;
+    const semB = b.cat === 'outros' ? 0 : 1;
+    return semA - semB || b.ms - a.ms;
+  });
+
+  const cats = S.settings.categories;
+  const semCategoria = ordenados.filter((i) => i.cat === 'outros').length;
+
+  let html = '<div class="sec"><div class="sec-h"><h2>' + esc(titulo) + '</h2>'
+    + '<span>' + (semCategoria
+      ? semCategoria + (semCategoria === 1 ? ' esperando você' : ' esperando você')
+      : esc(explicacao)) + '</span></div><div class="class-lista">';
+
+  for (const it of ordenados) {
+    const info = st.catInfo[it.cat] || { name: 'Sem categoria', color: '#5E6B66' };
+    const opcoes = ['<option value="">Automático</option>']
+      .concat(cats.map((c) => '<option value="' + esc(c.id) + '"'
+        + (it.explicito && it.cat === c.id ? ' selected' : '') + '>' + esc(c.name) + '</option>'))
+      .concat(['<option value="outros"' + (it.explicito && it.cat === 'outros' ? ' selected' : '')
+        + '>Sem categoria</option>']).join('');
+
+    html += '<div class="class-item' + (it.cat === 'outros' ? ' sem' : '') + '">'
+      + tile(it.nome, info.color, it.exe, it.dom)
+      + '<div style="min-width:0">'
+      + '<div class="row-name">' + esc(it.nome) + '</div>'
+      + '<div class="row-sub"><span class="num">' + fmt(it.ms) + '</span>'
+      + (it.explicito ? '' : ' · <em>' + esc(info.name.toLowerCase()) + ' por padrão</em>')
+      + '</div></div>'
+      + '<select data-atrib="' + esc(it.chave) + '">' + opcoes + '</select>'
+      + '</div>';
+  }
+  return html + '</div></div>';
 }
 
 function chips(catId, field, list) {
@@ -589,7 +651,12 @@ function viewSet() {
     + '<div class="set-row"><div><p>Intervalo de amostragem</p><small>menor = mais preciso, consome um pouco mais</small></div>'
     + '<select data-set="interval">' + [1000, 2000, 3000, 5000].map((v) =>
       opt(v, (v / 1000) + ' s', s.interval)).join('') + '</select></div>'
-    + '<div class="set-row"><div><p>Meta diária de foco</p><small>usada no anel da tela Hoje</small></div>'
+    + '<div class="set-row"><div><p>Esconder o que durou pouco</p>'
+    + '<small>janela que somou menos que isso no período não vira linha no relatório</small></div>'
+    + '<select data-set="minSegundos">' + [0, 10, 30, 60, 180].map((v) =>
+      opt(v, v === 0 ? 'mostrar tudo' : (v < 60 ? v + ' s' : (v / 60) + ' min'), s.minSegundos)).join('')
+    + '</select></div>'
+    + '<div class="set-row"><div><p>Meta diária de foco</p><small>usada na barra da tela Hoje</small></div>'
     + '<div style="display:flex;align-items:center;gap:8px">'
     + '<input type="number" min="30" max="900" step="30" value="' + s.focusGoalMin + '" data-set="focusGoalMin" style="min-width:86px;width:86px" />'
     + '<span style="font-size:12px;color:var(--txt-3)">min</span></div></div>'
@@ -869,6 +936,15 @@ document.addEventListener('change', async (ev) => {
     const value = t.type === 'number' ? Number(t.value) : (/^\d+$/.test(t.value) ? Number(t.value) : t.value);
     S.settings = await api.setSettings({ [key]: value });
     if (key === 'theme') document.documentElement.dataset.theme = S.settings.theme;
+    await load(true);
+    return;
+  }
+
+  if (t.dataset.atrib) {
+    const atrib = Object.assign({}, S.settings.atribuicoes || {});
+    if (t.value) atrib[t.dataset.atrib] = t.value;
+    else delete atrib[t.dataset.atrib];
+    S.settings = await api.setSettings({ atribuicoes: atrib });
     await load(true);
     return;
   }

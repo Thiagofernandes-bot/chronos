@@ -83,7 +83,8 @@ const DEFAULT_CATEGORIES = [
   }
 ];
 
-const OTHER = { id: 'outros', name: 'Outros', color: '#5E6B66' };
+// O que não casou com regra nenhuma e o usuário ainda não classificou.
+const OTHER = { id: 'outros', name: 'Sem categoria', color: '#5E6B66' };
 
 // Cores da primeira versão: quando a categoria salva ainda está com uma
 // delas, a troca para a paleta nova é automática.
@@ -122,13 +123,28 @@ function domainMatches(list, domain) {
   return false;
 }
 
+/** Chave estável de um item para o usuário classificar na mão. */
+function chaveDoItem(seg) {
+  if (seg.dom) return 'site:' + norm(seg.dom);
+  return 'app:' + norm(seg.exe || seg.app);
+}
+
 /**
- * Descobre a categoria de um segmento.
- * Segmentos de navegador sao classificados pelo site, nunca pelo nome do
- * navegador: duas horas de YouTube nao sao duas horas de "Chrome".
+ * Descobre a categoria de um segmento, nesta ordem:
+ *   1. o que o usuário escolheu para aquele app ou site;
+ *   2. as regras que já vêm prontas;
+ *   3. sem categoria.
+ *
+ * Segmento de navegador é classificado pelo site, nunca pelo nome do
+ * navegador: duas horas de YouTube não são duas horas de "Chrome".
  */
-function classify(seg, categories) {
+function classify(seg, categories, atribuicoes) {
   const cats = categories && categories.length ? categories : DEFAULT_CATEGORIES;
+
+  if (atribuicoes) {
+    const escolhido = atribuicoes[chaveDoItem(seg)];
+    if (escolhido) return escolhido;
+  }
 
   if (seg.dom) {
     for (const c of cats) if (domainMatches(c.domains || [], seg.dom)) return c.id;
@@ -150,4 +166,4 @@ function categoryMap(categories) {
   return map;
 }
 
-module.exports = { DEFAULT_CATEGORIES, OTHER, LEGACY_COLORS, classify, categoryMap };
+module.exports = { DEFAULT_CATEGORIES, OTHER, LEGACY_COLORS, classify, categoryMap, chaveDoItem };
