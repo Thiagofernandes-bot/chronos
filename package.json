@@ -8,7 +8,8 @@
     "start": "electron .",
     "icons": "node native/make-icons.js",
     "probe": "powershell -NoProfile -ExecutionPolicy Bypass -File native/build-probe.ps1",
-    "dist": "electron-builder --win"
+    "dist": "electron-builder --win",
+    "release": "electron-builder --win --publish always"
   },
   "build": {
     "appId": "design.starty.chronos",

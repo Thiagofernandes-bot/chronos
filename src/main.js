@@ -384,13 +384,30 @@ async function screenshotRun(dir) {
     await wait(2200);
     const run = (js) => win.webContents.executeJavaScript(js);
     const shot = async (name) => {
-      const now = await run('document.querySelector("#now").innerHTML.length');
-      console.log('[shot]', name, 'cartao agora:', now, 'chars');
+      // Janela atrás das outras não gera quadros novos: força o redesenho
+      // para não fotografar a tela anterior.
+      win.webContents.invalidate();
+      await wait(400);
+      const tela = await run('document.querySelector("#pageTitle").textContent');
+      // A primeira captura costuma vir do quadro antigo; a segunda já é a atual.
+      await win.webContents.capturePage();
+      await wait(300);
+      console.log('[shot]', name, '->', tela);
       fs.writeFileSync(path.join(dir, name + '.png'), (await win.webContents.capturePage()).toPNG());
     };
+    // Espera a tela realmente trocar (o item do menu fica ativo) em vez de
+    // chutar um tempo fixo, e mede quanto demorou.
     const go = async (page) => {
+      const t0 = Date.now();
       await run('document.querySelector(\'[data-page="' + page + '"]\').click()');
-      await wait(900);
+      for (let i = 0; i < 60; i++) {
+        const pronto = await run(
+          'document.querySelector(\'[data-page="' + page + '"]\').classList.contains("on")');
+        if (pronto) break;
+        await wait(100);
+      }
+      await wait(250);
+      console.log('[shot] troca para ' + page + ': ' + (Date.now() - t0) + ' ms');
     };
 
     for (const page of ['hoje', 'apps', 'sites', 'cats', 'hist', 'set']) {
