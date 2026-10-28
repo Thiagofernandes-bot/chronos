@@ -10,10 +10,12 @@ const zlib = require('zlib');
 const ROOT = path.join(__dirname, '..');
 
 const STOPS = [
-  [0.00, [0x6d, 0x5b, 0xff]],
-  [0.55, [0x9d, 0x7b, 0xff]],
-  [1.00, [0x3a, 0xd6, 0xbe]]
+  [0.00, [0x16, 0x9a, 0x50]],
+  [0.55, [0x55, 0xd3, 0x96]],
+  [1.00, [0x35, 0xe0, 0xc8]]
 ];
+
+const PRETO = [0x04, 0x06, 0x05];
 
 function gradient(t) {
   t = Math.max(0, Math.min(1, t));
@@ -45,18 +47,25 @@ function distToSegment(x, y, x1, y1, x2, y2) {
   return Math.hypot(x - (x1 + vx * t), y - (y1 + vy * t));
 }
 
-// Retorna [r,g,b,a] do ponto (coordenadas 0..1).
+// Disco verde sobre preto com uma fatia recortada: a leitura é "parte do
+// tempo já foi". Legível a 16px, onde desenho de relógio vira borrão.
 function shade(x, y) {
   if (!insideRoundRect(x, y, 0.235)) return null;
 
-  const [r, g, b] = gradient((x * 0.65 + y * 0.35));
+  const preto = [PRETO[0], PRETO[1], PRETO[2], 255];
+  const dx = x - 0.5;
+  const dy = y - 0.5;
+  const raio = Math.hypot(dx, dy);
+  if (raio > 0.30) return preto;
 
-  const ringDist = Math.abs(Math.hypot(x - 0.5, y - 0.5) - 0.265);
-  const onRing = ringDist <= 0.028;
-  const onHandA = distToSegment(x, y, 0.5, 0.5, 0.5, 0.315) <= 0.026;
-  const onHandB = distToSegment(x, y, 0.5, 0.5, 0.655, 0.575) <= 0.026;
+  // Ângulo a partir das 12 horas, crescendo no sentido do relógio.
+  let ang = Math.atan2(dy, dx) + Math.PI / 2;
+  if (ang < 0) ang += Math.PI * 2;
 
-  if (onRing || onHandA || onHandB) return [255, 255, 255, 255];
+  // A fatia recortada vai das 12 às 3 horas.
+  if (ang <= Math.PI / 2) return preto;
+
+  const [r, g, b] = gradient(x * 0.6 + y * 0.4);
   return [r, g, b, 255];
 }
 

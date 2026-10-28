@@ -1,7 +1,7 @@
 {
   "name": "chronos",
   "productName": "Chronos",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Rastreador de tempo do PC: apps, janelas e abas do navegador",
   "main": "src/main.js",
   "scripts": {
@@ -9,7 +9,7 @@
     "icons": "node native/make-icons.js",
     "probe": "powershell -NoProfile -ExecutionPolicy Bypass -File native/build-probe.ps1",
     "dist": "electron-builder --win",
-    "release": "electron-builder --win --publish always"
+    "release": "electron-builder --win nsis --publish always"
   },
   "build": {
     "appId": "design.starty.chronos",
@@ -27,7 +27,8 @@
       {
         "provider": "github",
         "owner": "Thiagofernandes-bot",
-        "repo": "chronos"
+        "repo": "chronos",
+        "releaseType": "release"
       }
     ],
     "extraResources": [

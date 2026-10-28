@@ -135,8 +135,8 @@ function fmtBig(ms) {
   const min = Math.round((ms || 0) / 60000);
   const h = Math.floor(min / 60);
   const m = min % 60;
-  if (h) return h + '<small>h</small> ' + pad(m) + '<small>min</small>';
-  return m + '<small>min</small>';
+  if (h) return h + '<i>h</i>' + pad(m) + '<i>min</i>';
+  return m + '<i>min</i>';
 }
 
 function clock(ms) {
@@ -202,20 +202,6 @@ function donut(items, total, size) {
   }
   return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '"'
     + ' style="transform:rotate(-90deg)">' + parts + '</svg>';
-}
-
-function ring(frac, size) {
-  const r = size / 2 - 9;
-  const c = 2 * Math.PI * r;
-  const len = c * Math.min(frac, 1);
-  return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" style="transform:rotate(-90deg)">'
-    + '<circle cx="' + size / 2 + '" cy="' + size / 2 + '" r="' + r + '" fill="none" stroke="var(--line)" stroke-width="10"></circle>'
-    + '<circle cx="' + size / 2 + '" cy="' + size / 2 + '" r="' + r + '" fill="none" stroke="url(#gr)" stroke-width="10" stroke-linecap="round"'
-    + ' stroke-dasharray="' + len.toFixed(1) + ' ' + (c - len).toFixed(1) + '"></circle>'
-    + '<defs><linearGradient id="gr" x1="0" y1="0" x2="1" y2="1">'
-    + '<stop offset="0" stop-color="#169a50"/><stop offset="0.55" stop-color="#55d396"/>'
-    + '<stop offset="1" stop-color="#35e0c8"/>'
-    + '</linearGradient></defs></svg>';
 }
 
 function stackedCol(byCat, total, max, catInfo) {
@@ -344,54 +330,63 @@ function viewHoje() {
       : 'Nenhum tempo registrado neste período.');
   }
 
-  html += '<div class="grid g-hero">'
-    + '<div class="card glow">'
-    + '<div class="card-h"><h2>TEMPO ATIVO' + (r.single ? '' : ' · TOTAL') + '</h2>'
-    + '<span class="hint">' + esc(rangeLabel()) + '</span></div>'
-    + '<div class="big num">' + fmtBig(st.activeMs) + '</div>'
-    + '<div class="kpi-sub">'
-    + '<div><span>Produtivo</span><b class="num">' + fmt(st.productiveMs) + '</b></div>'
-    + '<div><span>Ausente</span><b class="num">' + fmt(st.idleMs) + '</b></div>'
-    + '<div><span>Apps</span><b class="num">' + st.apps.length + '</b></div>'
-    + '<div><span>Sites</span><b class="num">' + st.sites.length + '</b></div>'
-    + (first ? '<div><span>Começou</span><b class="num">' + clock(first) + '</b></div>' : '')
-    + (lastSeen && r.single ? '<div><span>Última atividade</span><b class="num">' + clock(lastSeen) + '</b></div>' : '')
-    + '</div>'
+  // Abertura: o número manda na tela, a frase explica, os detalhes ficam
+  // numa linha de apoio — sem caixa nenhuma em volta.
+  html += '<div class="lead">'
+    + '<div class="lead-num num">' + fmtBig(st.activeMs) + '</div>'
     + summaryLine(st, r)
-    + hoursChart(st.hours, st.catInfo)
-    + '<p class="cap">cada coluna é uma hora do dia · a cor mostra a categoria</p>'
-    + '</div>';
+    + '<div class="facts">'
+    + fact('Produtivo', fmt(st.productiveMs))
+    + fact('Ausente', fmt(st.idleMs))
+    + fact('Aplicativos', String(st.apps.length))
+    + fact('Sites', String(st.sites.length))
+    + (first ? fact(r.single ? 'Começou' : 'Primeiro registro', clock(first)) : '')
+    + (lastSeen && r.single ? fact('Última atividade', clock(lastSeen)) : '')
+    + '</div></div>';
 
-  html += '<div class="card"><div class="card-h"><h2>META DE FOCO</h2>'
-    + '<span class="hint">' + (r.single ? 'hoje' : 'média/dia') + '</span></div>'
-    + '<div class="ring">' + ring(frac, 148)
-    + '<div class="ring-txt"><b class="num">' + pct(Math.min(frac, 1)) + '</b>'
-    + '<span>' + fmt(st.productiveMs / days) + ' de ' + fmt(goalMs) + '</span></div>'
-    + '</div></div>'
-    + '</div>';
+  html += spectrum(st);
 
-  html += '<div class="card mt"><div class="card-h"><h2>LINHA DO TEMPO</h2>'
-    + '<span class="hint">' + (r.single ? 'cor = categoria' : 'disponível para um dia só') + '</span></div>'
+  html += '<div class="sec"><div class="sec-h"><h2>Linha do tempo</h2>'
+    + '<span>' + (r.single ? 'cada bloco é um período seguido no mesmo app' : 'disponível para um dia só') + '</span></div>'
     + (r.single ? timelineChart(st.timeline)
-      + '<p class="cap">cada bloco é um período seguido no mesmo app — passe o mouse para ver qual</p>'
       : '<div class="empty-state">Escolha “Hoje” ou “Ontem” para ver a linha do tempo.</div>')
     + '</div>';
 
-  html += '<div class="grid g-2 mt">'
-    + '<div class="card"><div class="card-h"><h2>CATEGORIAS</h2></div>'
-    + '<div class="donut-wrap">'
-    + '<div class="donut">' + donut(st.categories, st.activeMs, 150)
-    + '<div class="donut-mid"><b class="num">' + st.categories.length + '</b><span>em uso</span></div></div>'
-    + '<div class="legend">'
-    + st.categories.slice(0, 6).map((c) => '<div><i style="background:' + c.color + '"></i>'
-      + '<span>' + esc(c.name) + '</span><b class="num">' + fmt(c.ms) + '</b></div>').join('')
-    + '</div></div></div>'
-    + '<div class="card"><div class="card-h"><h2>MAIS USADOS</h2>'
-    + '<span class="hint">apps e sites</span></div>'
-    + rankRows(mixTop(st), 'app')
-    + '</div></div>';
+  html += '<div class="sec"><div class="grid g-hero">'
+    + '<div><div class="sec-h" style="margin-top:0"><h2>Por hora</h2>'
+    + '<span>a cor mostra a categoria</span></div>'
+    + hoursChart(st.hours, st.catInfo) + '</div>'
+    + '<div><div class="sec-h" style="margin-top:0"><h2>Meta de foco</h2>'
+    + '<span>' + (r.single ? 'hoje' : 'média por dia') + '</span></div>'
+    + '<div class="goal-bar"><i style="width:' + (Math.min(frac, 1) * 100).toFixed(1) + '%"></i></div>'
+    + '<div class="goal-txt"><b class="num">' + pct(Math.min(frac, 1)) + '</b>'
+    + '<span class="num">' + fmt(st.productiveMs / days) + ' de ' + fmt(goalMs) + '</span></div>'
+    + '<p class="cap">' + esc(goalNote(st.productiveMs / days, goalMs)) + '</p>'
+    + '</div></div></div>';
+
+  html += '<div class="sec"><div class="sec-h"><h2>Mais usados</h2>'
+    + '<span>apps e sites na mesma lista</span></div>'
+    + rankRows(mixTop(st), 'app') + '</div>';
 
   return html;
+}
+
+function fact(label, value) {
+  return '<div><span>' + esc(label) + '</span><b class="num">' + esc(value) + '</b></div>';
+}
+
+// Uma faixa só com a divisão do tempo: lê mais rápido que um donut e não
+// precisa de legenda em caixa separada.
+function spectrum(st) {
+  if (!st.categories.length) return '';
+  const barras = st.categories.map((c) =>
+    '<i style="width:' + Math.max(c.pct * 100, 0.6).toFixed(2) + '%;background:' + c.color + '"'
+    + ' data-tip="' + esc(c.name) + '" data-tip2="' + esc(fmt(c.ms) + ' · ' + pct(c.pct)) + '"></i>').join('');
+  const legenda = st.categories.slice(0, 7).map((c) =>
+    '<span><em style="background:' + c.color + '"></em>' + esc(c.name)
+    + ' <b class="num">' + fmt(c.ms) + '</b></span>').join('');
+  return '<div class="spec"><div class="spec-bar">' + barras + '</div>'
+    + '<div class="spec-legend">' + legenda + '</div></div>';
 }
 
 // Uma frase em portugues claro explicando o numero grande logo acima.
@@ -405,7 +400,7 @@ function summaryLine(st, r) {
       + '</b> (' + pct(top.pct) + ')';
     txt += topApp ? ', e o que mais tomou tempo foi <b>' + esc(topApp.app) + '</b> com ' + fmt(topApp.ms) + '.' : '.';
   }
-  return '<p class="summary">' + txt + '</p>';
+  return '<p class="lead-txt">' + txt + '</p>';
 }
 
 // No resumo do dia, o navegador aparece quebrado por site: "Chrome" sozinho
@@ -428,9 +423,9 @@ function mixTop(st) {
 function viewApps() {
   const st = S.stats;
   if (!st.apps.length) return emptyState('Nenhum aplicativo registrado neste período.');
-  return '<div class="card"><div class="card-h"><h2>' + st.apps.length + ' APLICATIVOS</h2>'
-    + '<span class="hint">clique para ver as janelas</span></div>'
-    + rankRows(st.apps, 'app') + '</div>';
+  return '<div class="sec-h"><h2>Aplicativos</h2>'
+    + '<span>' + st.apps.length + ' no período · clique para ver as janelas</span></div>'
+    + rankRows(st.apps, 'app');
 }
 
 function viewSites() {
@@ -440,16 +435,13 @@ function viewSites() {
   }
   const totalBrowser = st.sites.reduce((a, b) => a + b.ms, 0);
   const tabs = st.sites.reduce((a, b) => a + b.tabs.length, 0);
-  return '<div class="grid g-3">'
-    + '<div class="card"><div class="card-h"><h2>NO NAVEGADOR</h2></div>'
-    + '<div class="big num">' + fmtBig(totalBrowser) + '</div></div>'
-    + '<div class="card"><div class="card-h"><h2>SITES</h2></div>'
-    + '<div class="big num">' + st.sites.length + '</div></div>'
-    + '<div class="card"><div class="card-h"><h2>ABAS DIFERENTES</h2></div>'
-    + '<div class="big num">' + tabs + '</div></div>'
+  return '<div class="lead">'
+    + '<div class="lead-num num">' + fmtBig(totalBrowser) + '</div>'
+    + '<p class="lead-txt">Tempo dentro do navegador, repartido entre <b>' + st.sites.length
+    + ' sites</b> e <b>' + tabs + ' abas</b> diferentes.</p>'
     + '</div>'
-    + '<div class="card mt"><div class="card-h"><h2>TEMPO POR SITE</h2>'
-    + '<span class="hint">clique para ver as abas</span></div>'
+    + '<div class="sec"><div class="sec-h"><h2>Tempo por site</h2>'
+    + '<span>clique para ver as abas</span></div>'
     + rankRows(st.sites, 'site') + '</div>';
 }
 
@@ -458,24 +450,26 @@ function viewCats() {
   const cats = S.settings.categories;
   const prod = new Set(S.settings.productive || []);
 
-  let html = '<div class="grid g-hero">'
-    + '<div class="card"><div class="card-h"><h2>DISTRIBUIÇÃO</h2>'
-    + '<span class="hint">' + esc(rangeLabel()) + '</span></div>'
+  const nomesProd = Array.from(prod).map((id) => (st.catInfo[id] || { name: id }).name);
+
+  let html = '<div class="lead">'
+    + '<div class="lead-num num">' + pct(st.activeMs ? st.productiveMs / st.activeMs : 0) + '<i>produtivo</i></div>'
+    + '<p class="lead-txt">De <b>' + fmt(st.activeMs) + '</b> ativas, <b>' + fmt(st.productiveMs)
+    + '</b> em ' + esc(nomesProd.join(' e ').toLowerCase() || '—') + '.'
+    + ' O que conta como produtivo é você quem define, aqui embaixo.</p></div>';
+
+  html += '<div class="sec"><div class="sec-h"><h2>Distribuição</h2>'
+    + '<span>' + esc(rangeLabel()) + '</span></div>'
     + '<div class="donut-wrap"><div class="donut">' + donut(st.categories, st.activeMs, 170)
     + '<div class="donut-mid"><b class="num">' + fmt(st.activeMs) + '</b><span>ativo</span></div></div>'
     + '<div class="legend">'
     + (st.categories.length ? st.categories.map((c) => '<div><i style="background:' + c.color + '"></i>'
       + '<span>' + esc(c.name) + '</span><b class="num">' + fmt(c.ms) + ' · ' + pct(c.pct) + '</b></div>').join('')
       : '<span style="color:var(--txt-3)">Sem dados no período.</span>')
-    + '</div></div></div>'
-    + '<div class="card"><div class="card-h"><h2>PRODUTIVO</h2></div>'
-    + '<div class="big num">' + pct(st.activeMs ? st.productiveMs / st.activeMs : 0) + '</div>'
-    + '<div class="kpi-sub"><div><span>Contando como produtivo</span><b>'
-    + esc(Array.from(prod).map((id) => (st.catInfo[id] || { name: id }).name).join(', ') || '—')
-    + '</b></div></div></div></div>';
+    + '</div></div></div>';
 
-  html += '<div class="card mt"><div class="card-h"><h2>REGRAS</h2>'
-    + '<span class="hint">o site manda mais que o app: 2h de YouTube não são 2h de Chrome</span></div>'
+  html += '<div class="sec"><div class="sec-h"><h2>Regras</h2>'
+    + '<span>o site manda mais que o app: 2h de YouTube não são 2h de Chrome</span></div>'
     + '<div class="cat-edit">';
 
   for (const c of cats) {
@@ -499,6 +493,13 @@ function viewCats() {
     + '<button class="btn" data-cat-reset>Voltar ao padrão</button>'
     + '</div></div>';
   return html;
+}
+
+// Quanto falta (ou sobra) para a meta do dia, em português de gente.
+function goalNote(feitoMs, metaMs) {
+  const falta = metaMs - feitoMs;
+  if (falta <= 0) return 'meta batida — ' + fmt(-falta) + ' além';
+  return 'faltam ' + fmt(falta);
 }
 
 function chips(catId, field, list) {
@@ -528,20 +529,19 @@ function viewHist() {
     labels += '<span>' + esc(days.length > 14 ? d.date.slice(8) : dayLabel(d.date)) + '</span>';
   }
 
-  return '<div class="grid g-3">'
-    + '<div class="card"><div class="card-h"><h2>TOTAL NO PERÍODO</h2></div><div class="big num">' + fmtBig(st.activeMs) + '</div></div>'
-    + '<div class="card"><div class="card-h"><h2>MÉDIA POR DIA ATIVO</h2></div><div class="big num">' + fmtBig(avg) + '</div></div>'
-    + '<div class="card"><div class="card-h"><h2>DIA MAIS CHEIO</h2></div>'
-    + '<div class="big num">' + fmtBig(best ? best.ms : 0) + '</div>'
-    + '<div class="kpi-sub"><div><span>quando</span><b>' + esc(best && best.ms ? dayLabel(best.date, true) : '—') + '</b></div></div></div>'
+  return '<div class="lead">'
+    + '<div class="lead-num num">' + fmtBig(st.activeMs) + '</div>'
+    + '<p class="lead-txt">Total dos últimos 30 dias, com média de <b>' + fmt(avg)
+    + '</b> por dia usado. O dia mais cheio foi <b>'
+    + esc(best && best.ms ? dayLabel(best.date, true) : '—') + '</b>, com ' + fmt(best ? best.ms : 0) + '.</p>'
     + '</div>'
-    + '<div class="card mt"><div class="card-h"><h2>POR DIA</h2><span class="hint">cor = categoria</span></div>'
+    + '<div class="sec"><div class="sec-h"><h2>Por dia</h2><span>a cor mostra a categoria</span></div>'
     + '<div class="days">' + bars + '</div><div class="days-x">' + labels + '</div></div>'
-    + '<div class="grid g-2 mt">'
-    + '<div class="card"><div class="card-h"><h2>APLICATIVOS DO PERÍODO</h2></div>' + rankRows(st.apps.slice(0, 10), 'app') + '</div>'
-    + '<div class="card"><div class="card-h"><h2>SITES DO PERÍODO</h2></div>'
+    + '<div class="sec"><div class="grid g-2">'
+    + '<div><div class="sec-h" style="margin-top:0"><h2>Aplicativos</h2></div>' + rankRows(st.apps.slice(0, 10), 'app') + '</div>'
+    + '<div><div class="sec-h" style="margin-top:0"><h2>Sites</h2></div>'
     + (st.sites.length ? rankRows(st.sites.slice(0, 10), 'site') : '<div class="empty-state">Sem navegação registrada.</div>')
-    + '</div></div>';
+    + '</div></div></div>';
 }
 
 function viewSet() {
@@ -550,7 +550,7 @@ function viewSet() {
   const opt = (v, label, cur) => '<option value="' + v + '"' + (String(cur) === String(v) ? ' selected' : '') + '>' + label + '</option>';
 
   return '<div class="grid g-2">'
-    + '<div class="card"><div class="card-h"><h2>RASTREIO</h2></div><div class="set">'
+    + '<div class="card"><div class="card-h"><h2>Rastreio</h2></div><div class="set">'
     + '<div class="set-row"><div><p>Pausar rastreio</p><small>nada é registrado enquanto estiver pausado</small></div>'
     + sw('paused', s.paused) + '</div>'
     + '<div class="set-row"><div><p>Marcar ausência após</p><small>tempo sem teclado nem mouse</small></div>'
@@ -565,7 +565,7 @@ function viewSet() {
     + '<span style="font-size:12px;color:var(--txt-3)">min</span></div></div>'
     + '</div></div>'
 
-    + '<div class="card"><div class="card-h"><h2>APLICATIVO</h2></div><div class="set">'
+    + '<div class="card"><div class="card-h"><h2>Aplicativo</h2></div><div class="set">'
     + '<div class="set-row"><div><p>Iniciar com o Windows</p><small>abre minimizado na bandeja</small></div>'
     + sw('autostart', s.autostart) + '</div>'
     + '<div class="set-row"><div><p>Fechar para a bandeja</p><small>o X esconde a janela e continua contando</small></div>'
@@ -579,7 +579,7 @@ function viewSet() {
     + '<button class="btn" data-act="open-data">Abrir pasta</button></div>'
     + '</div></div></div>'
 
-    + '<div class="card mt"><div class="card-h"><h2>ATUALIZAÇÕES</h2>'
+    + '<div class="card mt"><div class="card-h"><h2>Atualizações</h2>'
     + '<span class="hint">versão instalada: ' + esc((S.update && S.update.current) || '—') + '</span></div>'
     + '<div class="set"><div class="set-row"><div><p>Atualização automática</p>'
     + '<small>' + esc(updateLine()) + '</small></div>'
@@ -588,7 +588,7 @@ function viewSet() {
       : '<button class="btn" data-act="update-check">Procurar atualizações</button>')
     + '</div></div></div>'
 
-    + '<div class="card mt"><div class="card-h"><h2>DADOS</h2></div><div class="set">'
+    + '<div class="card mt"><div class="card-h"><h2>Dados</h2></div><div class="set">'
     + '<div class="set-row"><div><p>Exportar período atual</p><small>planilha CSV com cada janela e cada aba</small></div>'
     + '<button class="btn primary" data-act="export">Exportar CSV</button></div>'
     + '<div class="set-row"><div><p>Apagar tudo</p><small>remove todo o histórico gravado — não tem volta</small></div>'
@@ -637,7 +637,7 @@ function renderNow() {
       : (c.dom || c.title || '');
 
   $('#now').innerHTML = '<div class="now-h"><i class="dot' + (off ? ' off' : '') + '"></i>'
-    + (paused ? 'PAUSADO' : 'AGORA') + '</div>'
+    + (paused ? 'Pausado' : 'Agora') + '</div>'
     + '<div class="now-id">'
     + (off ? '' : tile(label, 'var(--accent)', c.exe))
     + '<div style="min-width:0">'
