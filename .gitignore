@@ -1,0 +1,11 @@
+node_modules/
+dist/
+
+# Gerados por "npm run probe" e "npm run icons"
+resources/chronos-probe.exe
+resources/icon.png
+resources/tray.png
+build/icon.ico
+
+# Dados e configuração ficam em %APPDATA%\Chronos, nunca no repositório
+*.jsonl

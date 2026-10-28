@@ -1,0 +1,73 @@
+{
+  "name": "chronos",
+  "productName": "Chronos",
+  "version": "1.1.0",
+  "description": "Rastreador de tempo do PC: apps, janelas e abas do navegador",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "icons": "node native/make-icons.js",
+    "probe": "powershell -NoProfile -ExecutionPolicy Bypass -File native/build-probe.ps1",
+    "dist": "electron-builder --win"
+  },
+  "build": {
+    "appId": "design.starty.chronos",
+    "productName": "Chronos",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources",
+        "to": "probe",
+        "filter": [
+          "chronos-probe.exe",
+          "tray.png",
+          "icon.png"
+        ]
+      }
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Chronos",
+      "artifactName": "Chronos-instalador-${version}.exe"
+    },
+    "portable": {
+      "artifactName": "Chronos-portatil-${version}.exe"
+    }
+  },
+  "author": "Thiago",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^39.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
+  }
+}
