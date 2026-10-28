@@ -86,7 +86,23 @@ npm run probe    # compila o chronos-probe.exe (usa o csc.exe do Windows)
 npm run icons    # gera os ícones PNG/ICO por código
 npm start        # roda em modo desenvolvimento
 npm run dist     # gera o instalador e o portátil em dist/
+npm run release  # gera e publica no GitHub Releases (precisa de GH_TOKEN)
 ```
+
+## Publicar uma versão nova
+
+O app checa o GitHub Releases a cada 6 horas, baixa em segundo plano e aplica
+no próximo fechamento. Para lançar:
+
+```powershell
+# 1. subir a versão em package.json (ex.: 1.1.0 -> 1.1.1)
+# 2. publicar
+$env:GH_TOKEN = gh auth token
+npm run release
+```
+
+A atualização automática só funciona no app instalado; em desenvolvimento ela
+fica desligada de propósito.
 
 Variáveis de ambiente úteis:
 

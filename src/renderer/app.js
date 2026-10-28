@@ -94,10 +94,11 @@ async function ensureSiteIcons(doms) {
     const k = (d || '').toLowerCase();
     if (k && !(k in SITE_ICON_CACHE) && missing.indexOf(k) < 0) missing.push(k);
   }
-  if (!missing.length) return;
+  if (!missing.length) return false;
   let got = {};
   try { got = await api.siteIcons(missing); } catch (e) { /* segue com as iniciais */ }
   for (const k of missing) SITE_ICON_CACHE[k] = got[k] || null;
+  return Object.keys(got).length > 0;
 }
 
 function tile(name, color, exe, dom) {
@@ -664,11 +665,17 @@ async function load(keepScroll) {
   const r = S.page === 'hist'
     ? { from: keyOf(new Date(Date.now() - 29 * 864e5)), to: keyOf(new Date()) }
     : currentRange();
-  S.stats = await api.stats(r.from, r.to);
-  await ensureIcons(S.stats.apps.map((a) => a.exe));
-  await ensureSiteIcons(S.stats.sites.map((s) => s.dom));
+  const st = await api.stats(r.from, r.to);
+  S.stats = st;
+  // Ícone de programa é local e instantâneo; favicon vem da internet, então
+  // a tela não espera por ele.
+  await ensureIcons(st.apps.map((a) => a.exe));
   render();
   $('#view').scrollTop = top;
+
+  ensureSiteIcons(st.sites.map((s) => s.dom)).then((novos) => {
+    if (novos && S.stats === st) renderView();
+  });
 }
 
 function toast(msg) {
