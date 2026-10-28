@@ -19,7 +19,15 @@
     },
     "files": [
       "src/**/*",
-      "package.json"
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Thiagofernandes-bot",
+        "repo": "chronos"
+      }
     ],
     "extraResources": [
       {

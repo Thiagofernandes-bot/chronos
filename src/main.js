@@ -6,6 +6,8 @@ const fs = require('fs');
 const readline = require('readline');
 const { spawn } = require('child_process');
 
+const { autoUpdater } = require('electron-updater');
+
 const { Store, dateKey } = require('./store');
 const { Tracker } = require('./tracker');
 
@@ -319,6 +321,58 @@ function createWindow() {
   });
 }
 
+/* ------------------------------------------------------------ atualizacao */
+
+// Busca a versão nova no GitHub Releases, baixa em segundo plano e instala
+// quando o app fecha. Só funciona empacotado: em desenvolvimento fica quieto.
+const updateState = { status: 'idle', version: null, percent: 0, error: null };
+
+function updateInfo() {
+  return {
+    status: updateState.status,
+    version: updateState.version,
+    percent: updateState.percent,
+    error: updateState.error,
+    current: app.getVersion()
+  };
+}
+
+function pushUpdate(status) {
+  if (status) updateState.status = status;
+  if (win && !win.isDestroyed()) win.webContents.send('update', updateInfo());
+}
+
+function checkForUpdates() {
+  if (!app.isPackaged) return;
+  updateState.error = null;
+  autoUpdater.checkForUpdates().catch((e) => {
+    updateState.error = e && e.message ? e.message : String(e);
+    pushUpdate('error');
+  });
+}
+
+function setupUpdater() {
+  if (!app.isPackaged) { updateState.status = 'dev'; return; }
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('checking-for-update', () => pushUpdate('checking'));
+  autoUpdater.on('update-available', (i) => { updateState.version = i.version; pushUpdate('downloading'); });
+  autoUpdater.on('update-not-available', () => pushUpdate('latest'));
+  autoUpdater.on('download-progress', (p) => {
+    updateState.percent = Math.round(p.percent || 0);
+    pushUpdate('downloading');
+  });
+  autoUpdater.on('update-downloaded', (i) => { updateState.version = i.version; pushUpdate('ready'); });
+  autoUpdater.on('error', (err) => {
+    updateState.error = err && err.message ? err.message : String(err);
+    pushUpdate('error');
+  });
+
+  setTimeout(checkForUpdates, 8000);
+  setInterval(checkForUpdates, 6 * 3600 * 1000);
+}
+
 /* ------------------------------------------------- captura para revisao */
 
 // Usado so em desenvolvimento (CHRONOS_SHOT=pasta): percorre as telas e
@@ -421,6 +475,18 @@ function registerIpc() {
     return true;
   });
 
+  ipcMain.handle('update:state', () => updateInfo());
+  ipcMain.handle('update:check', () => { checkForUpdates(); return updateInfo(); });
+  ipcMain.handle('update:install', () => {
+    if (updateState.status !== 'ready') return false;
+    quitting = true;
+    stopProbe();
+    tracker.flush();
+    store.flush();
+    autoUpdater.quitAndInstall();
+    return true;
+  });
+
   ipcMain.handle('win', (e, action) => {
     if (!win) return;
     if (action === 'hide') win.hide();
@@ -452,6 +518,7 @@ if (!app.requestSingleInstanceLock()) {
     createTray();
     startProbe();
     applyPause();
+    setupUpdater();
 
     setInterval(() => {
       tracker.checkpoint(5 * 60 * 1000);

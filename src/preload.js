@@ -15,7 +15,13 @@ contextBridge.exposeInMainWorld('chronos', {
   clearData: () => ipcRenderer.invoke('clear'),
   win: (action) => ipcRenderer.invoke('win', action),
   quit: () => ipcRenderer.invoke('quit'),
+  updateState: () => ipcRenderer.invoke('update:state'),
+  updateCheck: () => ipcRenderer.invoke('update:check'),
+  updateInstall: () => ipcRenderer.invoke('update:install'),
   onLive: (cb) => {
     ipcRenderer.on('live', (e, data) => cb(data));
+  },
+  onUpdate: (cb) => {
+    ipcRenderer.on('update', (e, data) => cb(data));
   }
 });
