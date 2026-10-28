@@ -36,6 +36,22 @@ Os ícones dos programas são extraídos do próprio executável pelo Windows �
 não sai nada do PC para isso. Já os ícones dos sites precisam de internet, por
 isso vêm **desligados**: ligue em *Ajustes → Ícones dos sites* se quiser.
 
+### Sugestões
+
+A aba Sugestões é o único lugar do app que envia algo para fora, e só quando
+a pessoa escreve e clica. Vai o texto, o nome (se preencher), a versão e um
+código aleatório da instalação — nenhum dado de uso.
+
+Fica numa tabela Supabase (`chronos_sugestoes`, projeto `ritual`) com RLS que
+**aceita inserir e proíbe ler**: a chave publicável embutida no app não lê nem
+apaga nada, só envia. Para ver o que chegou:
+
+```sql
+select criado_em, nome, versao, texto
+from public.chronos_sugestoes
+order by criado_em desc;
+```
+
 ### Privacidade
 
 Guarda o domínio e o caminho da página (`youtube.com/watch`), **sem** a query
@@ -65,6 +81,7 @@ padrão. Para apagar tudo: *Ajustes → Apagar histórico*.
 - **Navegador** — tempo por site; clique para ver as abas daquele site.
 - **Categorias** — distribuição e o editor de regras.
 - **Histórico** — últimos 30 dias, média por dia e dia mais cheio.
+- **Sugestões** — quem usa escreve o que está faltando e envia.
 - **Ajustes** — ausência, intervalo, meta, tema, ícones dos sites, iniciar com
   o Windows, exportar CSV, apagar dados.
 

@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const readline = require('readline');
 const { spawn } = require('child_process');
+const { randomUUID } = require('crypto');
 
 const { autoUpdater } = require('electron-updater');
 
@@ -321,6 +322,56 @@ function createWindow() {
   });
 }
 
+/* -------------------------------------------------------------- sugestoes */
+
+// Único ponto do app que envia alguma coisa para fora, e só quando a pessoa
+// escreve e clica. A chave abaixo é publicável de propósito: a tabela tem RLS
+// que aceita inserir e proíbe ler, então ninguém enxerga a sugestão de outro.
+const SUGESTOES_URL = 'https://dnjitxyewyhiomodicqz.supabase.co/rest/v1/chronos_sugestoes';
+const SUGESTOES_CHAVE = 'sb_publishable_YvQD5-sAz9wSmOW6ZUifAw_0FhdzcYI';
+
+let ultimoEnvio = 0;
+
+async function enviarSugestao(texto, nome) {
+  const limpo = String(texto || '').trim();
+  if (limpo.length < 3) return { ok: false, erro: 'Escreva um pouco mais.' };
+  if (limpo.length > 2000) return { ok: false, erro: 'Passou de 2000 caracteres.' };
+  if (Date.now() - ultimoEnvio < 15000) {
+    return { ok: false, erro: 'Espere alguns segundos antes de enviar outra.' };
+  }
+
+  if (!store.settings.instalacao) store.saveSettings({ instalacao: randomUUID() });
+
+  try {
+    const res = await net.fetch(SUGESTOES_URL, {
+      method: 'POST',
+      headers: {
+        apikey: SUGESTOES_CHAVE,
+        Authorization: 'Bearer ' + SUGESTOES_CHAVE,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal'
+      },
+      body: JSON.stringify({
+        texto: limpo,
+        nome: (String(nome || '').trim().slice(0, 80)) || null,
+        versao: app.getVersion(),
+        instalacao: store.settings.instalacao
+      })
+    });
+
+    if (!res.ok) {
+      return { ok: false, erro: 'O servidor recusou o envio (código ' + res.status + ').' };
+    }
+
+    ultimoEnvio = Date.now();
+    const enviadas = (store.settings.sugestoesEnviadas || []).concat([{ texto: limpo, em: Date.now() }]);
+    store.saveSettings({ sugestoesEnviadas: enviadas.slice(-30) });
+    return { ok: true, enviadas: store.settings.sugestoesEnviadas };
+  } catch (e) {
+    return { ok: false, erro: 'Não consegui falar com o servidor. Sem internet?' };
+  }
+}
+
 /* ------------------------------------------------------------ atualizacao */
 
 // Busca a versão nova no GitHub Releases, baixa em segundo plano e instala
@@ -410,9 +461,19 @@ async function screenshotRun(dir) {
       console.log('[shot] troca para ' + page + ': ' + (Date.now() - t0) + ' ms');
     };
 
-    for (const page of ['hoje', 'apps', 'sites', 'cats', 'hist', 'set']) {
+    for (const page of ['hoje', 'apps', 'sites', 'cats', 'hist', 'sug', 'set']) {
       await go(page);
       await shot(page);
+    }
+
+    if (process.env.CHRONOS_TESTA_SUGESTAO) {
+      await go('sug');
+      await run('document.querySelector("#sugTexto").value = '
+        + JSON.stringify(process.env.CHRONOS_TESTA_SUGESTAO) + ';'
+        + 'document.querySelector("#sugNome").value = "teste automatico"');
+      await run('document.querySelector(\'[data-act="sug-enviar"]\').click()');
+      await wait(3000);
+      await shot('sug-enviada');
     }
 
     await go('hoje');
@@ -491,6 +552,8 @@ function registerIpc() {
     liveCache.at = 0;
     return true;
   });
+
+  ipcMain.handle('sugestao', (e, texto, nome) => enviarSugestao(texto, nome));
 
   ipcMain.handle('update:state', () => updateInfo());
   ipcMain.handle('update:check', () => { checkForUpdates(); return updateInfo(); });

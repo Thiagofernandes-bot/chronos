@@ -10,6 +10,7 @@ const PAGES = [
   { id: 'sites', label: 'Navegador' },
   { id: 'cats', label: 'Categorias' },
   { id: 'hist', label: 'Histórico' },
+  { id: 'sug', label: 'Sugestões' },
   { id: 'set', label: 'Ajustes' }
 ];
 
@@ -19,6 +20,7 @@ const ICONS = {
   sites: '<circle cx="10" cy="10" r="7"/><path d="M3 10h14M10 3c1.9 2 2.9 4.4 2.9 7s-1 5-2.9 7c-1.9-2-2.9-4.4-2.9-7S8.1 5 10 3z"/>',
   cats: '<path d="M10 10V3a7 7 0 1 1-7 7h7z"/><path d="M12.4 3.7A7 7 0 0 1 16.3 7.6"/>',
   hist: '<path d="M3 17h14"/><rect x="4.5" y="9" width="3" height="5" rx="1"/><rect x="9" y="5" width="3" height="9" rx="1"/><rect x="13.5" y="11" width="3" height="3" rx="1"/>',
+  sug: '<path d="M16.5 11.8c0 1.3-1.1 2.4-2.4 2.4H8.3L4.5 17v-2.8H5.9c-1.3 0-2.4-1.1-2.4-2.4V5.9c0-1.3 1.1-2.4 2.4-2.4h8.2c1.3 0 2.4 1.1 2.4 2.4z"/>',
   set: '<path d="M3 6h7M14 6h3M3 14h3M10 14h7"/><circle cx="12" cy="6" r="2"/><circle cx="8" cy="14" r="2"/>'
 };
 
@@ -544,6 +546,34 @@ function viewHist() {
     + '</div></div></div>';
 }
 
+function viewSug() {
+  const enviadas = (S.settings.sugestoesEnviadas || []).slice().reverse();
+
+  let html = '<p class="lead-txt" style="margin-top:0">'
+    + 'Falta alguma coisa no Chronos? Escreva aqui. Vai direto para quem cuida do app.</p>'
+    + '<div class="sug">'
+    + '<textarea id="sugTexto" rows="5" maxlength="2000"'
+    + ' placeholder="Ex.: queria um resumo da semana toda segunda de manhã."></textarea>'
+    + '<div class="sug-linha">'
+    + '<input type="text" id="sugNome" maxlength="80" placeholder="Seu nome (opcional)" />'
+    + '<button class="btn primary" data-act="sug-enviar">Enviar sugestão</button>'
+    + '</div>'
+    + '<p class="cap">Sai daqui só o que você escrever, o nome se você preencher, a versão do app'
+    + ' e um código aleatório desta instalação. Nenhum dado de uso: nem app, nem site, nem tempo.</p>'
+    + '</div>';
+
+  if (enviadas.length) {
+    html += '<div class="sec"><div class="sec-h"><h2>O que você já mandou</h2>'
+      + '<span>' + enviadas.length + (enviadas.length === 1 ? ' sugestão' : ' sugestões') + '</span></div>';
+    for (const s of enviadas) {
+      html += '<div class="sug-item"><p>' + esc(s.texto) + '</p>'
+        + '<span>' + esc(new Date(s.em).toLocaleString('pt-BR')) + '</span></div>';
+    }
+    html += '</div>';
+  }
+  return html;
+}
+
 function viewSet() {
   const s = S.settings;
   const sw = (key, on) => '<span class="sw' + (on ? ' on' : '') + '" data-toggle="' + key + '"></span>';
@@ -605,7 +635,8 @@ function renderNav() {
     + ' stroke-linecap="round" stroke-linejoin="round">' + ICONS[p.id] + '</svg>'
     + p.label + '</button>').join('');
 
-  $('#ranges').innerHTML = S.page === 'set' || S.page === 'hist' ? '' : RANGES.map((r) =>
+  const semPeriodo = S.page === 'set' || S.page === 'hist' || S.page === 'sug';
+  $('#ranges').innerHTML = semPeriodo ? '' : RANGES.map((r) =>
     '<button data-range="' + r.id + '" class="' + (S.range === r.id ? 'on' : '') + '">' + r.label + '</button>').join('');
   $('#ranges').hidden = !$('#ranges').innerHTML;
 
@@ -622,7 +653,9 @@ function renderNav() {
   const page = PAGES.find((p) => p.id === S.page);
   $('#pageTitle').textContent = page.label;
   $('#pageSub').textContent = S.page === 'set' ? 'como o Chronos trabalha'
-    : S.page === 'hist' ? 'últimos 30 dias' : rangeLabel();
+    : S.page === 'hist' ? 'últimos 30 dias'
+      : S.page === 'sug' ? 'o que você gostaria de ver aqui'
+        : rangeLabel();
 }
 
 function renderNow() {
@@ -650,7 +683,10 @@ function renderNow() {
 
 function renderView() {
   if (!S.stats || !S.settings) return;
-  const map = { hoje: viewHoje, apps: viewApps, sites: viewSites, cats: viewCats, hist: viewHist, set: viewSet };
+  const map = {
+    hoje: viewHoje, apps: viewApps, sites: viewSites,
+    cats: viewCats, hist: viewHist, sug: viewSug, set: viewSet
+  };
   $('#view').innerHTML = updateBanner() + map[S.page]();
 }
 
@@ -776,6 +812,24 @@ document.addEventListener('click', async (ev) => {
       S.settings = await api.setSettings({ paused: !S.settings.paused });
       S.live = await api.live();
       render();
+    }
+    if (what === 'sug-enviar') {
+      const area = document.querySelector('#sugTexto');
+      const nome = document.querySelector('#sugNome');
+      if (!area) return;
+      act.textContent = 'Enviando…';
+      act.disabled = true;
+      const res = await api.enviarSugestao(area.value, nome ? nome.value : '');
+      if (res && res.ok) {
+        S.settings = await api.getSettings();
+        renderView();
+        toast('Sugestão enviada. Obrigado!');
+      } else {
+        act.textContent = 'Enviar sugestão';
+        act.disabled = false;
+        toast((res && res.erro) || 'Não consegui enviar.');
+      }
+      return;
     }
     if (what === 'theme') {
       const next = S.settings.theme === 'light' ? 'dark' : 'light';

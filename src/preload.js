@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('chronos', {
   clearData: () => ipcRenderer.invoke('clear'),
   win: (action) => ipcRenderer.invoke('win', action),
   quit: () => ipcRenderer.invoke('quit'),
+  enviarSugestao: (texto, nome) => ipcRenderer.invoke('sugestao', texto, nome),
   updateState: () => ipcRenderer.invoke('update:state'),
   updateCheck: () => ipcRenderer.invoke('update:check'),
   updateInstall: () => ipcRenderer.invoke('update:install'),
