@@ -11,7 +11,7 @@ marcaTopo();
 addEventListener('scroll', marcaTopo, { passive: true });
 
 /* ----------------------------------------------------------- entrada suave */
-const alvos = document.querySelectorAll('.sobe');
+const alvos = document.querySelectorAll('.sobe, .revela');
 if (calmo || !('IntersectionObserver' in window)) {
   alvos.forEach((el) => el.classList.add('vis'));
 } else {
@@ -26,6 +26,19 @@ if (calmo || !('IntersectionObserver' in window)) {
     });
   }, { rootMargin: '0px 0px -12% 0px', threshold: 0.12 });
   alvos.forEach((el) => olho.observe(el));
+
+  // Rede de seguranca: se por algum motivo o observador nao disparar, nada
+  // pode ficar invisivel. Passado um tempo, tudo que ja esta na tela entra.
+  setTimeout(() => {
+    alvos.forEach((el) => {
+      if (el.classList.contains('vis')) return;
+      const r = el.getBoundingClientRect();
+      if (r.top < innerHeight && r.bottom > 0) {
+        el.classList.add('vis');
+        olho.unobserve(el);
+      }
+    });
+  }, 1400);
 }
 
 /* ------------------------------------------- a janela do herói se endireita */
@@ -209,3 +222,88 @@ if (ponto && anel && fino && !calmo) {
   addEventListener('pointerleave', () => raiz.classList.remove('cursor-vivo'));
   addEventListener('blur', () => raiz.classList.remove('cursor-vivo'));
 }
+
+/* ----------------------------------------- esteira: duplica para dar a volta */
+// A animacao anda -50%, entao o conteudo precisa estar duas vezes no trilho
+// para o rabo encostar na cabeca sem salto.
+const trilho = document.querySelector('.esteira .trilho');
+if (trilho) {
+  const copia = trilho.firstElementChild.cloneNode(true);
+  copia.setAttribute('aria-hidden', 'true');
+  trilho.append(copia);
+}
+
+/* -------------------------------- uma so passada de scroll para a pagina toda */
+const barra = document.querySelector('.progresso i');
+const faixaImg = document.querySelector('.faixa > img');
+const faixaSec = document.querySelector('.faixa');
+const passos = document.querySelector('.passos');
+const listaPassos = passos ? [...passos.querySelectorAll('.passo')] : [];
+
+let pedidoRolagem = 0;
+const naRolagem = () => {
+  pedidoRolagem = 0;
+  const altura = document.documentElement.scrollHeight - innerHeight;
+
+  if (barra) {
+    barra.style.setProperty('--rolagem', altura > 0 ? (scrollY / altura).toFixed(4) : '0');
+  }
+
+  // a imagem da faixa anda mais devagar que a pagina; o scale 1.14 do CSS e
+  // justamente a folga para ela se mexer sem mostrar borda
+  if (faixaImg && faixaSec && !calmo) {
+    const r = faixaSec.getBoundingClientRect();
+    if (r.bottom > -200 && r.top < innerHeight + 200) {
+      const meio = (r.top + r.height / 2 - innerHeight / 2) / innerHeight;
+      faixaImg.style.setProperty('--par', (meio * 46).toFixed(1) + 'px');
+    }
+  }
+
+  // o fio dos passos enche conforme a secao atravessa a tela
+  if (passos) {
+    const r = passos.getBoundingClientRect();
+    const bruto = (innerHeight * 0.85 - r.top) / (r.height + innerHeight * 0.25);
+    const t = Math.min(Math.max(bruto, 0), 1);
+    passos.style.setProperty('--anda', t.toFixed(3));
+    listaPassos.forEach((p, i) => {
+      p.classList.toggle('ativo', t >= (i + 0.35) / listaPassos.length);
+    });
+  }
+};
+
+naRolagem();
+addEventListener('scroll', () => { if (!pedidoRolagem) pedidoRolagem = requestAnimationFrame(naRolagem); }, { passive: true });
+addEventListener('resize', naRolagem, { passive: true });
+
+/* ------------------------------------------------- faq que abre e fecha macio */
+// O <details> normal pisca o conteudo inteiro de uma vez. Aqui eu seguro o
+// clique, animo a altura com a Web Animations API (que nao depende de
+// requestAnimationFrame) e so entao mexo no atributo open.
+document.querySelectorAll('.faq details').forEach((det) => {
+  const resumo = det.querySelector('summary');
+  const resp = det.querySelector('.resp');
+  if (!resumo || !resp) return;
+  let animando = false;
+
+  resumo.addEventListener('click', (e) => {
+    if (calmo) return;
+    e.preventDefault();
+    if (animando) return;
+    animando = true;
+
+    const abrindo = !det.open;
+    if (abrindo) det.open = true;
+    const alvo = resp.scrollHeight;
+
+    const quadros = abrindo
+      ? [{ height: '0px', opacity: 0 }, { height: alvo + 'px', opacity: 1 }]
+      : [{ height: alvo + 'px', opacity: 1 }, { height: '0px', opacity: 0 }];
+
+    const anim = resp.animate(quadros, { duration: 360, easing: 'cubic-bezier(.2,.8,.2,1)' });
+    anim.onfinish = () => {
+      resp.style.height = '';
+      if (!abrindo) det.open = false;
+      animando = false;
+    };
+  });
+});

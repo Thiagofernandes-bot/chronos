@@ -15,6 +15,8 @@
 </head>
 <body>
 
+<div class="progresso" aria-hidden="true"><i></i></div>
+
 <!-- a marca, desenhada uma vez só e reaproveitada por <use> -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
@@ -95,14 +97,35 @@
     </div>
   </section>
 
+  <!-- ====================================================== esteira de uso -->
+  <!-- o dia inteiro rolando sem parar: o movimento aqui e o proprio assunto -->
+  <section class="esteira" aria-hidden="true">
+    <div class="trilho">
+      <div class="fila">
+        <span><i style="background:#d75b58"></i>Figma <b>2h51</b></span>
+        <span><i style="background:#d7a737"></i>WhatsApp <b>1h44</b></span>
+        <span><i style="background:#bb9826"></i>Discord <b>1h25</b></span>
+        <span><i style="background:#50c58c"></i>youtube.com <b>55min</b></span>
+        <span><i style="background:#41acd6"></i>app.clickup.com <b>54min</b></span>
+        <span><i style="background:#16914c"></i>instagram.com <b>49min</b></span>
+        <span><i style="background:#bb9826"></i>Steam <b>30min</b></span>
+        <span><i style="background:#6792d7"></i>drive.google.com <b>23min</b></span>
+        <span><i style="background:#41acd6"></i>Adobe Photoshop <b>21min</b></span>
+        <span><i style="background:#50c58c"></i>Visual Studio Code <b>20min</b></span>
+        <span><i style="background:#d75b58"></i>Claude <b>18min</b></span>
+        <span><i style="background:#d7a737"></i>chatgpt.com <b>10min</b></span>
+      </div>
+    </div>
+  </section>
+
   <!-- =============================================================== fatos -->
   <section class="fatos">
     <div class="env">
       <div class="grade">
-        <div class="fato"><b>1 segundo</b><span>é de quanto em quanto tempo ele confere qual janela está na frente</span></div>
-        <div class="fato"><b>Zero byte</b><span>sai do seu computador: os dados ficam no disco, com você</span></div>
-        <div class="fato"><b>Por site</b><span>o navegador não vira uma linha só — cada endereço conta separado</span></div>
-        <div class="fato"><b>Sozinho</b><span>quando sai versão nova, ele avisa e se atualiza no próprio app</span></div>
+        <div class="fato sobe"><b>1 segundo</b><span>é de quanto em quanto tempo ele confere qual janela está na frente</span></div>
+        <div class="fato sobe"><b>Zero byte</b><span>sai do seu computador: os dados ficam no disco, com você</span></div>
+        <div class="fato sobe"><b>Por site</b><span>o navegador não vira uma linha só — cada endereço conta separado</span></div>
+        <div class="fato sobe"><b>Sozinho</b><span>quando sai versão nova, ele avisa e se atualiza no próprio app</span></div>
       </div>
     </div>
   </section>
@@ -112,7 +135,7 @@
     <div class="env">
       <div class="cabeca sobe">
         <span class="rotulo">O que ele faz</span>
-        <h2 class="titulo">Tempo medido do jeito que ele acontece de verdade.</h2>
+        <h2 class="titulo revela"><span>Tempo medido do jeito que ele acontece de verdade.</span></h2>
         <p>Não adianta contar só a janela que está na frente. Você deixa o vídeo rodando do lado, fica em call com o Discord minimizado, joga em tela cheia. O Chronos entende os três.</p>
       </div>
 
@@ -169,9 +192,51 @@
             <h3>O dia inteiro numa faixa</h3>
             <p>Cada bloco é um período seguido no mesmo app. Dá para ver num relance onde o dia virou, onde ele emendou e onde você sumiu do teclado.</p>
           </div>
+          <!-- os blocos abaixo foram lidos pixel a pixel do print do app, para
+               a faixa poder se desenhar sem eu inventar um dia que nao houve -->
           <div class="prova">
-            <div class="janela">
-              <img src="/imagens/detalhe-linha.png" width="1004" height="162" alt="Linha do tempo do dia, das 9h às 23h, com um bloco colorido por período de uso." loading="lazy">
+            <div class="cartao-linha">
+              <div class="topo-linha">
+                <b>Linha do tempo</b>
+                <span>cada bloco é um período seguido no mesmo app</span>
+              </div>
+              <div class="faixa-dia" role="img" aria-label="O dia das 9h às 23h, com um bloco colorido por período de uso e três vãos onde não houve atividade.">
+                <i style="--w:1.49%;--c:#50c58c;--i:0"></i>
+                <i style="--w:3.52%;--c:#d75b58;--i:1"></i>
+                <i class="vazio" style="--w:3.63%;--i:2"></i>
+                <i style="--w:6.51%;--c:#bb9826;--i:3"></i>
+                <i style="--w:0.53%;--c:#16914c;--i:4"></i>
+                <i style="--w:3.09%;--c:#bb9826;--i:5"></i>
+                <i style="--w:2.56%;--c:#41acd6;--i:6"></i>
+                <i style="--w:5.76%;--c:#d75b58;--i:7"></i>
+                <i style="--w:1.49%;--c:#bb9826;--i:8"></i>
+                <i style="--w:1.92%;--c:#d7a737;--i:9"></i>
+                <i style="--w:2.35%;--c:#bb9826;--i:10"></i>
+                <i style="--w:2.24%;--c:#d7a737;--i:11"></i>
+                <i style="--w:2.13%;--c:#d75b58;--i:12"></i>
+                <i style="--w:2.45%;--c:#6792d7;--i:13"></i>
+                <i style="--w:2.24%;--c:#50c58c;--i:14"></i>
+                <i style="--w:1.92%;--c:#bb9826;--i:15"></i>
+                <i style="--w:2.88%;--c:#50c58c;--i:16"></i>
+                <i style="--w:0.96%;--c:#d75b58;--i:17"></i>
+                <i style="--w:2.35%;--c:#50c58c;--i:18"></i>
+                <i class="vazio" style="--w:11.85%;--i:19"></i>
+                <i style="--w:4.80%;--c:#bb9826;--i:20"></i>
+                <i style="--w:1.39%;--c:#16914c;--i:21"></i>
+                <i style="--w:1.60%;--c:#bb9826;--i:22"></i>
+                <i style="--w:5.98%;--c:#16914c;--i:23"></i>
+                <i style="--w:2.35%;--c:#bb9826;--i:24"></i>
+                <i style="--w:4.91%;--c:#41acd6;--i:25"></i>
+                <i style="--w:1.81%;--c:#bb9826;--i:26"></i>
+                <i style="--w:4.06%;--c:#d75b58;--i:27"></i>
+                <i style="--w:4.48%;--c:#d7a737;--i:28"></i>
+                <i style="--w:3.31%;--c:#d75b58;--i:29"></i>
+                <i class="vazio" style="--w:3.42%;--i:30"></i>
+              </div>
+              <div class="horas" aria-hidden="true">
+                <span>09h</span><span>11h</span><span>13h</span><span>15h</span>
+                <span>17h</span><span>19h</span><span>21h</span><span>23h</span>
+              </div>
             </div>
           </div>
         </article>
@@ -184,7 +249,16 @@
   <section class="faixa">
     <img src="/imagens/vidro-camadas.jpg" width="1400" height="939" alt="" loading="lazy">
     <div class="env">
-      <p>Um número que você<br>acredita. <span>Senão não<br>serve para nada.</span></p>
+      <div class="dito">
+        <span class="rotulo sobe">A regra da casa</span>
+        <p class="sobe">Um número que você acredita. <span>Senão não serve para nada.</span></p>
+        <ul class="regras">
+          <li class="sobe"><i class="sim"></i>Tocando na sua frente, conta</li>
+          <li class="sobe"><i class="sim"></i>Minimizado com som saindo, conta</li>
+          <li class="sobe"><i class="nao"></i>Aberto em silêncio, não conta</li>
+          <li class="sobe"><i class="nao"></i>Dois ao mesmo tempo nunca viram dois</li>
+        </ul>
+      </div>
     </div>
   </section>
 
@@ -193,7 +267,7 @@
     <div class="env">
       <div class="cabeca sobe">
         <span class="rotulo">Como funciona</span>
-        <h2 class="titulo">Três passos, e nunca mais.</h2>
+        <h2 class="titulo revela"><span>Três passos, e nunca mais.</span></h2>
       </div>
       <div class="passos">
         <div class="passo sobe">
@@ -218,8 +292,8 @@
   <!-- ================================================================== cta -->
   <section class="cta">
     <div class="env">
-      <img class="obj sobe" src="/imagens/vidro-marca.jpg" width="1400" height="1400" alt="" loading="lazy">
-      <h2 class="titulo sobe">Baixe e veja o seu próprio dia.</h2>
+      <div class="sobe"><img class="obj balanca" src="/imagens/vidro-marca.jpg" width="1400" height="1400" alt="" loading="lazy"></div>
+      <h2 class="titulo revela"><span>Baixe e veja o seu próprio dia.</span></h2>
       <p class="lead sobe">Leva menos de um minuto. Amanhã de manhã já tem o dia de hoje inteiro medido esperando você.</p>
       <div class="acoes sobe">
         <a class="pilula g" href="/baixar">
@@ -236,7 +310,7 @@
     <div class="env">
       <div class="cabeca sobe">
         <span class="rotulo">Dúvidas</span>
-        <h2 class="titulo">O que costumam perguntar.</h2>
+        <h2 class="titulo revela"><span>O que costumam perguntar.</span></h2>
       </div>
 
       <details>

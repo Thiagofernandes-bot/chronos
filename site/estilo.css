@@ -504,3 +504,136 @@ img{display:block;max-width:100%;height:auto}
   .cur-ponto,.cur-anel{display:none!important}
   html.cursor-vivo,html.cursor-vivo *{cursor:auto}
 }
+
+/* ====================================================== barra de rolagem */
+.progresso{position:fixed;inset:0 0 auto;height:2px;z-index:80;pointer-events:none}
+.progresso i{
+  display:block;height:100%;transform-origin:left;
+  transform:scaleX(var(--rolagem,0));
+  background:linear-gradient(90deg,var(--verde),#2BBE86 60%,var(--verde-escuro));
+}
+
+/* ========================================================== titulo subindo */
+/* o -12% embaixo e para nao cortar o pe das letras com descida */
+/* O texto sobe de tras da propria caixa. Recortar o h2 em si NAO funciona:
+   com clip-path o IntersectionObserver passa a enxergar area zero, nunca
+   dispara, e o titulo fica escondido para sempre. Por isso quem some e o
+   span de dentro, e quem e observado e a caixa, que segue com tamanho. */
+.revela{display:block;overflow:hidden;padding-bottom:.12em;margin-bottom:-.12em}
+.revela > span{
+  display:block;transform:translateY(106%);
+  transition:transform 1.05s cubic-bezier(.2,.8,.2,1);
+}
+.revela.vis > span{transform:none}
+
+/* ============================================================== esteira */
+.esteira{
+  overflow:hidden;border-bottom:1px solid var(--linha);padding:20px 0;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 7%,#000 93%,transparent);
+          mask-image:linear-gradient(90deg,transparent,#000 7%,#000 93%,transparent);
+}
+.trilho{display:flex;width:max-content;animation:esteira-anda 52s linear infinite}
+.esteira:hover .trilho{animation-play-state:paused}
+.fila{display:flex;gap:12px;padding-right:12px}
+.esteira span{
+  display:inline-flex;align-items:center;gap:9px;white-space:nowrap;
+  padding:8px 16px 8px 12px;border-radius:100px;
+  border:1px solid var(--linha);background:rgba(255,255,255,.022);
+  font-size:.82rem;color:#99A39E;letter-spacing:-.01em;
+}
+.esteira i{width:6px;height:6px;border-radius:50%;flex:none}
+.esteira b{color:#DDE4E0;font-weight:500}
+@keyframes esteira-anda{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+/* ================================================ linha do tempo que desenha */
+.cartao-linha{
+  border:1px solid var(--linha);border-radius:14px;
+  background:#070A08;padding:16px 16px 13px;
+}
+.topo-linha{display:flex;justify-content:space-between;align-items:baseline;gap:14px;margin-bottom:15px}
+.topo-linha b{font-size:.92rem;font-weight:600;color:var(--texto)}
+.topo-linha span{font-size:.71rem;color:var(--apagado);text-align:right}
+.faixa-dia{display:flex;gap:2px;height:56px;border-radius:9px;overflow:hidden;background:#10140F}
+.faixa-dia i{
+  display:block;width:var(--w);background:var(--c);
+  transform:scaleX(0);transform-origin:left center;
+  transition:transform .55s cubic-bezier(.2,.8,.2,1);
+  transition-delay:calc(var(--i) * 40ms);
+}
+.faixa-dia i.vazio{background:#1b211e}
+.vis .faixa-dia i{transform:none}
+.horas{display:flex;justify-content:space-between;margin-top:10px;font-size:.66rem;color:var(--apagado)}
+
+/* ==================================================== a faixa, refeita */
+.faixa > img{
+  transform:scale(1.14) translateY(var(--par,0px));
+  transition:transform .1s linear;
+}
+.faixa::after{
+  background:linear-gradient(96deg,
+    rgba(4,6,5,.97) 0%,rgba(4,6,5,.93) 36%,
+    rgba(4,6,5,.42) 64%,rgba(4,6,5,.9) 100%);
+}
+.faixa .dito{max-width:640px}
+.faixa .dito .rotulo{display:block;margin-bottom:22px}
+.faixa p{
+  max-width:17ch;font-size:clamp(1.9rem,3.9vw,3.1rem);
+  font-weight:600;letter-spacing:-.035em;line-height:1.1;
+}
+.faixa p span{color:var(--apagado)}
+.regras{list-style:none;margin-top:40px;display:grid;gap:13px}
+.regras li{display:flex;align-items:center;gap:13px;font-size:1rem;color:#AEB8B3}
+.regras i{
+  width:19px;height:19px;border-radius:50%;flex:none;
+  position:relative;border:1px solid;
+}
+.regras i.sim{border-color:rgba(85,211,150,.55);background:rgba(85,211,150,.13)}
+.regras i.nao{border-color:rgba(255,255,255,.2)}
+.regras i.sim::before{
+  content:'';position:absolute;left:6px;top:4px;width:4px;height:8px;
+  border:solid var(--verde);border-width:0 1.6px 1.6px 0;transform:rotate(42deg);
+}
+.regras i.nao::before,.regras i.nao::after{
+  content:'';position:absolute;left:4px;top:8px;width:9px;height:1.5px;
+  background:rgba(255,255,255,.42);
+}
+.regras i.nao::before{transform:rotate(45deg)}
+.regras i.nao::after{transform:rotate(-45deg)}
+@media (max-width:860px){
+  .faixa::after{background:linear-gradient(180deg,rgba(4,6,5,.78),rgba(4,6,5,.94))}
+  .faixa p{max-width:none}
+  .regras li{font-size:.92rem}
+}
+
+/* ================================================= bento entrando deitado */
+.bento{perspective:1400px}
+.bloco.sobe{transform:translateY(30px) rotateX(6deg);transform-origin:50% 100%}
+.bloco.sobe.vis{transform:none}
+.bloco.vis:hover{transform:translateY(-3px)}
+
+/* ================================================= passos com fio que enche */
+.passos{position:relative}
+.passos::before{
+  content:'';position:absolute;left:0;top:-1px;height:1px;width:100%;
+  background:linear-gradient(90deg,var(--verde),#2BBE86);
+  transform:scaleX(var(--anda,0));transform-origin:left;
+}
+.passo b{opacity:.35;transition:opacity .45s}
+.passo.ativo b{opacity:1}
+@media (max-width:860px){
+  .passos::before{width:1px;height:100%;left:-1px;top:0;transform:scaleY(var(--anda,0));transform-origin:top}
+}
+
+/* ================================================= faq com altura animada */
+.faq .resp{overflow:hidden}
+.faq details[open] > summary{color:var(--verde)}
+
+/* ===================================== quem pediu menos movimento */
+@media (prefers-reduced-motion:reduce){
+  .trilho{animation:none}
+  .faixa-dia i{transition:none;transform:none}
+  .revela > span{transform:none;transition:none}
+  .bloco.sobe{transform:none}
+  .faixa > img{transform:scale(1.14)}
+  .progresso{display:none}
+}
