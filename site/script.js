@@ -28,18 +28,49 @@ if (calmo || !('IntersectionObserver' in window)) {
   alvos.forEach((el) => olho.observe(el));
 }
 
-/* --------------------------------------------------- janela do herói flutua */
-const palco = document.querySelector('.palco .janela');
-if (palco && !calmo) {
+/* ------------------------------------------- a janela do herói se endireita */
+// Ela aparece deitada para trás e vai ficando de frente conforme sobe na
+// tela. Quem desliga animação no sistema recebe a janela reta e parada.
+const palco = document.querySelector('.palco');
+const janela = document.querySelector('.palco .janela');
+
+if (janela && !calmo) {
+  const ZOOM = 0.94;                                  // tamanho no começo
+  const giroMaximo = () => (innerWidth < 760 ? 11 : 19); // graus no começo
+
   let pedido = 0;
-  const mover = () => {
+  const endireitar = () => {
     pedido = 0;
-    const topoPalco = palco.getBoundingClientRect().top;
-    if (topoPalco > innerHeight || topoPalco < -palco.offsetHeight) return;
-    // sobe no máximo 26px enquanto a janela atravessa a tela
-    const avanco = Math.min(Math.max((innerHeight - topoPalco) / innerHeight, 0), 1);
-    palco.style.transform = 'translateY(' + (26 - avanco * 26).toFixed(1) + 'px)';
+    const topo = janela.getBoundingClientRect().top;
+    // 0 com a quina de cima quase no pé da tela, 1 quando ela chega a 20%
+    const bruto = (innerHeight * 0.92 - topo) / (innerHeight * 0.72);
+    const t = Math.min(Math.max(bruto, 0), 1);
+    const suave = 1 - Math.pow(1 - t, 2);
+    janela.style.setProperty('--giro', ((1 - suave) * giroMaximo()).toFixed(2) + 'deg');
+    janela.style.setProperty('--zoom', (ZOOM + suave * (1 - ZOOM)).toFixed(4));
   };
-  mover();
-  addEventListener('scroll', () => { if (!pedido) pedido = requestAnimationFrame(mover); }, { passive: true });
+  endireitar();
+  addEventListener('scroll', () => { if (!pedido) pedido = requestAnimationFrame(endireitar); }, { passive: true });
+  addEventListener('resize', endireitar, { passive: true });
+
+  // a varredura de luz acontece uma vez, quando a janela entra em cena
+  if ('IntersectionObserver' in window) {
+    const olhoPalco = new IntersectionObserver((itens) => {
+      itens.forEach((it) => {
+        if (!it.isIntersecting) return;
+        palco.classList.add('acende');
+        olhoPalco.disconnect();
+      });
+    }, { threshold: 0.25 });
+    olhoPalco.observe(janela);
+  } else {
+    palco.classList.add('acende');
+  }
+
+  // e a luz do mouse passeia por cima da tela
+  janela.addEventListener('pointermove', (e) => {
+    const r = janela.getBoundingClientRect();
+    janela.style.setProperty('--mx', ((e.clientX - r.left) / r.width * 100).toFixed(1) + '%');
+    janela.style.setProperty('--my', ((e.clientY - r.top) / r.height * 100).toFixed(1) + '%');
+  });
 }

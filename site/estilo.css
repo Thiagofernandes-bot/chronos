@@ -167,7 +167,7 @@ img{display:block;max-width:100%;height:auto}
 .janela img{width:100%}
 
 /* a janela grande que fecha o herói */
-.palco{position:relative;margin-top:88px;padding-bottom:110px;isolation:isolate}
+.palco{position:relative;margin-top:88px;padding-bottom:110px;isolation:isolate;perspective:2200px}
 .palco::before{
   content:'';position:absolute;z-index:0;left:50%;top:30px;translate:-50% 0;
   width:min(1100px,92vw);height:420px;border-radius:50%;
@@ -175,7 +175,36 @@ img{display:block;max-width:100%;height:auto}
   filter:blur(40px);pointer-events:none;
 }
 .palco .env{position:relative}
-.palco .janela{max-width:1060px;margin-inline:auto;position:relative}
+.palco .janela{
+  max-width:1060px;margin-inline:auto;position:relative;
+  /* o giro e o zoom vem do script, conforme a janela sobe na tela */
+  transform:rotateX(var(--giro,9deg)) scale(var(--zoom,.97));
+  transform-origin:50% 0;will-change:transform;
+}
+/* fio de luz na quina de cima, como num vidro de verdade */
+.palco .janela::before{
+  content:'';position:absolute;z-index:5;inset:0 0 auto;height:1px;pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(127,227,180,.6) 20%,rgba(255,255,255,.85) 50%,rgba(127,227,180,.6) 80%,transparent);
+}
+.palco .luz,.palco .varre{
+  position:absolute;inset:0;z-index:4;pointer-events:none;
+  border-radius:inherit;overflow:hidden;
+}
+/* a luz que segue o mouse por cima da tela */
+.palco .luz{
+  background:radial-gradient(420px circle at var(--mx,50%) var(--my,50%),rgba(85,211,150,.18),transparent 62%);
+  mix-blend-mode:screen;opacity:0;transition:opacity .45s;
+}
+.palco .janela:hover .luz{opacity:1}
+/* a varredura, uma vez só, quando a janela entra em cena */
+.palco .varre::before{
+  content:'';position:absolute;top:-80%;left:0;width:42%;height:260%;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.09) 46%,transparent);
+  transform:rotate(16deg);translate:-160% 0;
+}
+.palco.acende .varre::before{animation:varredura 1.7s cubic-bezier(.35,.05,.2,1) .45s both}
+@keyframes varredura{from{translate:-160% 0}to{translate:340% 0}}
+
 .palco .janela::after{
   content:'';position:absolute;inset:auto 0 0;height:150px;pointer-events:none;
   background:linear-gradient(180deg,rgba(7,10,8,0),rgba(7,10,8,.96) 86%);
@@ -338,5 +367,7 @@ img{display:block;max-width:100%;height:auto}
 .sobe.vis{opacity:1;transform:none}
 @media (prefers-reduced-motion:reduce){
   .sobe{opacity:1;transform:none;transition:none}
+  .palco .janela{transform:none}
+  .palco.acende .varre::before{animation:none}
   .pilula:hover,.bloco:hover{transform:none}
 }
