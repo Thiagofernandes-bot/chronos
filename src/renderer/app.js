@@ -380,38 +380,18 @@ function viewHoje() {
 
   html += '<div class="sec"><div class="sec-h"><h2>Mais usados</h2>'
     + '<span>apps e sites na mesma lista</span></div>'
-    + rankRows(mixTop(st), 'app') + notaOcultos(st) + '</div>';
-
-  html += secaoMidia(st);
+    + rankRows(mixTop(st), 'app') + notaMidia(st) + notaOcultos(st) + '</div>';
 
   return html;
 }
 
-// Vídeo e música tocando enquanto você faz outra coisa. Fica numa conta à
-// parte de propósito: esse tempo acontece em cima do tempo ativo, então somar
-// tudo num número só daria um dia de mais de 24 horas.
-function secaoMidia(st) {
+// Explica, quando for o caso, que há tempo contado fora da tela.
+function notaMidia(st) {
   const m = st.midia;
-  if (!m || !m.fontes || !m.fontes.length) return '';
-
-  const itens = m.fontes.map((f) => ({
-    app: f.artista || f.app,
-    exe: null,
-    sub: f.artista
-      ? f.app + ' · ' + f.titulos.length + (f.titulos.length === 1 ? ' item' : ' itens')
-      : f.app,
-    ms: f.ms,
-    cat: 'outros',
-    color: '#E8B23A',
-    top: f.titulos
-  }));
-
-  return '<div class="sec"><div class="sec-h"><h2>Tocando em segundo plano</h2>'
-    + '<span class="num">' + fmt(m.totalMs) + ' no período</span></div>'
-    + rankRows(itens, 'app')
-    + '<p class="cap">conta mesmo com a janela atrás de outra ou na segunda tela — '
-    + 'por isso este tempo corre por fora do tempo ativo. No YouTube, o nome é o do canal.</p>'
-    + '</div>';
+  if (!m || !m.extraMs) return '';
+  return '<p class="cap">inclui ' + fmt(m.extraMs)
+    + ' que estavam tocando com a janela atrás de outra ou na segunda tela — '
+    + 'rodando conta como uso.</p>';
 }
 
 function fact(label, value) {
@@ -485,8 +465,8 @@ function viewSites() {
     + ' sites</b> e <b>' + tabs + ' abas</b> diferentes.</p>'
     + '</div>'
     + '<div class="sec"><div class="sec-h"><h2>Tempo por site</h2>'
-    + '<span>clique para ver as abas</span></div>'
-    + rankRows(st.sites, 'site') + '</div>';
+    + '<span>clique para ver as abas e os canais</span></div>'
+    + rankRows(st.sites, 'site') + notaMidia(st) + notaOcultos(st) + '</div>';
 }
 
 function viewCats() {

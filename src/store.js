@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { DEFAULT_CATEGORIES, OTHER, LEGACY_COLORS, classify, categoryMap, chaveDoItem } = require('./categories');
 const { ehRuido, nomeApp, tituloLimpo } = require('./ruido');
+const { duracao, subtrair, juntar } = require('./intervalos');
 
 const DEFAULT_SETTINGS = {
   interval: 2000,          // ms entre amostras
@@ -205,7 +206,11 @@ class Store {
     let activeMs = 0;
     let idleMs = 0;
     let midiaMs = 0;
-    const byMidia = new Map();
+    // Períodos por alvo, para somar mídia sem contar o mesmo minuto duas
+    // vezes quando o vídeo também estava na frente.
+    const frentePorAlvo = new Map();
+    const midiaPorAlvo = new Map();
+    const midiaRotulos = new Map();
     const byCat = new Map();
     const byApp = new Map();
     const bySite = new Map();
@@ -224,15 +229,17 @@ class Store {
       // entra no tempo ativo (senão o dia passaria de 24h).
       if (seg.midia) {
         midiaMs += ms;
-        const artista = (seg.artista || '').trim();
-        const chave = (seg.app || '?') + '\u0001' + (artista || seg.titulo || '');
-        let fonte = byMidia.get(chave);
-        if (!fonte) {
-          fonte = { app: seg.app || '?', artista, ms: 0, titulos: new Map() };
-          byMidia.set(chave, fonte);
+        const alvo = seg.dom ? 'site:' + seg.dom : 'app:' + (seg.app || '?');
+        juntar(midiaPorAlvo, alvo, seg.s, seg.e);
+
+        let rotulos = midiaRotulos.get(alvo);
+        if (!rotulos) {
+          rotulos = { dom: seg.dom || null, app: seg.app || '?', titulos: new Map() };
+          midiaRotulos.set(alvo, rotulos);
         }
-        fonte.ms += ms;
-        if (seg.titulo) fonte.titulos.set(seg.titulo, (fonte.titulos.get(seg.titulo) || 0) + ms);
+        // No YouTube o "artista" é o canal: é ele que vale como rótulo.
+        const rotulo = (seg.artista || '').trim() || (seg.titulo || '').trim();
+        if (rotulo) rotulos.titulos.set(rotulo, (rotulos.titulos.get(rotulo) || 0) + ms);
         continue;
       }
 
@@ -264,6 +271,8 @@ class Store {
       }
 
       const appKey = app + '\u0001' + (seg.exe || '');
+      juntar(frentePorAlvo, 'app:' + appKey, seg.s, seg.e);
+      if (seg.dom) juntar(frentePorAlvo, 'site:' + seg.dom, seg.s, seg.e);
       let appAgg = byApp.get(appKey);
       if (!appAgg) {
         appAgg = { app, exe: seg.exe, ms: 0, cat, browser: !!seg.browser, titles: new Map() };
@@ -286,6 +295,44 @@ class Store {
       }
     }
 
+    // Mídia tocando é uso: o tempo entra na conta do próprio site (ou app),
+    // descontado o período em que aquilo já estava na frente — assistir
+    // olhando para a tela não pode contar duas vezes.
+    let midiaExtraMs = 0;
+    for (const [alvo, periodos] of midiaPorAlvo) {
+      const extra = duracao(subtrair(periodos, frentePorAlvo.get(alvo) || []));
+      if (extra <= 0) continue;
+      midiaExtraMs += extra;
+      const rotulos = midiaRotulos.get(alvo) || { titulos: new Map() };
+
+      if (alvo.indexOf('site:') === 0) {
+        const dom = alvo.slice(5);
+        const cat = classify({ dom }, cats, atrib);
+        let site = bySite.get(dom);
+        if (!site) { site = { dom, ms: 0, cat, tabs: new Map() }; bySite.set(dom, site); }
+        site.ms += extra;
+        for (const [t, tms] of rotulos.titulos) site.tabs.set(t, (site.tabs.get(t) || 0) + tms);
+        byCat.set(cat, (byCat.get(cat) || 0) + extra);
+      } else {
+        const nome = alvo.slice(4);
+        let chave = null;
+        for (const [k, v] of byApp) {
+          if (String(v.app).toLowerCase() === nome.toLowerCase()) { chave = k; break; }
+        }
+        if (!chave) {
+          chave = nome + '\u0001';
+          byApp.set(chave, {
+            app: nome, exe: null, ms: 0, browser: false, titles: new Map(),
+            cat: classify({ app: nome, exe: nome }, cats, atrib)
+          });
+        }
+        const alvoApp = byApp.get(chave);
+        alvoApp.ms += extra;
+        for (const [t, tms] of rotulos.titulos) alvoApp.titles.set(t, (alvoApp.titles.get(t) || 0) + tms);
+        byCat.set(alvoApp.cat, (byCat.get(alvoApp.cat) || 0) + extra);
+      }
+    }
+
     // Piso de duração: o que somou poucos segundos no período é ruído de
     // passagem (diálogo aberto por engano, janela que piscou) e não ajuda a
     // medir nada. O tempo continua no total do dia; só não vira linha.
@@ -297,10 +344,15 @@ class Store {
       .sort((a, b) => b.ms - a.ms)
       .slice(0, limit);
 
+    // A soma das categorias pode passar do tempo de tela (vídeo tocando
+    // enquanto você trabalha), então a fatia é sobre a própria soma.
+    let totalCat = 0;
+    for (const ms of byCat.values()) totalCat += ms;
+
     const categories = Array.from(byCat.entries())
       .map(([id, ms]) => {
         const info = catInfo[id] || OTHER;
-        return { id, name: info.name, color: info.color, ms, pct: activeMs ? ms / activeMs : 0 };
+        return { id, name: info.name, color: info.color, ms, pct: totalCat ? ms / totalCat : 0 };
       })
       .sort((a, b) => b.ms - a.ms);
 
@@ -325,13 +377,9 @@ class Store {
     const apps = appsTodos.filter((a) => a.ms >= minMs);
     const sites = sitesTodos.filter((s) => s.ms >= minMs);
 
-    const midia = {
-      totalMs: midiaMs,
-      fontes: Array.from(byMidia.values())
-        .filter((f) => f.ms >= minMs)
-        .map((f) => ({ app: f.app, artista: f.artista, ms: f.ms, titulos: topList(f.titulos, 10) }))
-        .sort((a, b) => b.ms - a.ms)
-    };
+    // totalMs: tudo que tocou. extraMs: a parte que aconteceu fora da tela e
+    // por isso somou ao tempo dos sites e apps.
+    const midia = { totalMs: midiaMs, extraMs: midiaExtraMs };
 
     // Lista para a tela de Categorias: cada app e cada site que apareceu de
     // verdade, com a categoria atual e se ela veio de escolha do usuário.

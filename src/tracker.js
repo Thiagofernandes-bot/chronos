@@ -108,7 +108,7 @@ class Tracker extends EventEmitter {
   // frente: o que manda é a sessão de mídia do Windows dizer "tocando".
   feedMidia(m, ts) {
     const tocando = m && (m.titulo || m.artista || m.app);
-    const key = tocando ? [m.app, m.artista, m.titulo].join('\u0001') : null;
+    const key = tocando ? [m.app, m.dom || '', m.artista, m.titulo].join('\u0001') : null;
 
     if (this.midia && this.midia.key !== key) this.closeMidia(ts);
     if (!tocando) return;
@@ -117,6 +117,7 @@ class Tracker extends EventEmitter {
       this.midia = {
         key, s: ts, e: ts,
         app: (m.app || '').trim(),
+        dom: (m.dom || '').trim() || null,
         artista: (m.artista || '').trim(),
         titulo: (m.titulo || '').trim()
       };
@@ -141,7 +142,7 @@ class Tracker extends EventEmitter {
     if (e - c.s < 5000) return; // menos de 5s não é "assistir"
     this.emit('segment', {
       s: c.s, e, midia: 1,
-      app: c.app, artista: c.artista, titulo: c.titulo
+      app: c.app, dom: c.dom, artista: c.artista, titulo: c.titulo
     });
   }
 

@@ -21,6 +21,8 @@ static class Probe
     [DllImport("user32.dll")] static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
     [DllImport("kernel32.dll")] static extern uint GetTickCount();
     [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr hWnd, EnumWindowsProc cb, IntPtr lp);
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumWindowsProc cb, IntPtr lp);
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hWnd);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr hWnd, StringBuilder name, int count);
 
     delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
@@ -84,7 +86,9 @@ static class Probe
         {
             sb.Append(",\"midia\":{\"app\":").Append(Json(midia[0]))
               .Append(",\"titulo\":").Append(Json(midia[1]))
-              .Append(",\"artista\":").Append(Json(midia[2])).Append("}");
+              .Append(",\"artista\":").Append(Json(midia[2]))
+              .Append(",\"dom\":").Append(Json(midia.Length > 3 && midia[3].Length > 0 ? midia[3] : null))
+              .Append("}");
         }
 
         if (hwnd == IntPtr.Zero)
@@ -241,6 +245,69 @@ static class Probe
         return null;
     }
 
+    // Sites que tocam midia: quando o Windows diz "Chrome esta tocando", e
+    // num deles que o tempo deve cair, nao no navegador.
+    static readonly string[] DominiosDeMidia = {
+        "youtube.com", "youtu.be", "netflix.com", "twitch.tv", "spotify.com",
+        "primevideo.com", "disneyplus.com", "globoplay.globo.com", "max.com",
+        "hbomax.com", "crunchyroll.com", "soundcloud.com", "deezer.com",
+        "music.youtube.com", "vimeo.com", "twitch.com"
+    };
+
+    // Percorre TODAS as janelas de navegador abertas (nao so a da frente) e
+    // devolve o dominio da aba ativa de cada uma.
+    static List<string> DominiosAbertosNoNavegador()
+    {
+        var achados = new List<string>();
+        EnumWindows(delegate(IntPtr h, IntPtr lp)
+        {
+            if (!IsWindowVisible(h)) return true;
+            if (GetWindowTextLength(h) <= 0) return true;
+
+            uint pid; GetWindowThreadProcessId(h, out pid);
+            string exe = ProcessName((int)pid);
+            if (!Browsers.Contains(exe)) return true;
+
+            string url = BrowserUrl(h, WindowTitle(h));
+            if (string.IsNullOrEmpty(url)) return true;
+
+            string dom = Dominio(url);
+            if (dom != null && !achados.Contains(dom)) achados.Add(dom);
+            return true;
+        }, IntPtr.Zero);
+        return achados;
+    }
+
+    static string Dominio(string url)
+    {
+        if (string.IsNullOrEmpty(url)) return null;
+        string u = url.Trim();
+        u = Regex.Replace(u, @"^[a-z]+://", "", RegexOptions.IgnoreCase);
+        int barra = u.IndexOfAny(new char[] { '/', '?', '#' });
+        if (barra >= 0) u = u.Substring(0, barra);
+        u = Regex.Replace(u, @"^www\.", "", RegexOptions.IgnoreCase);
+        u = u.Split(':')[0].ToLowerInvariant();
+        return u.Length > 0 && u.IndexOf('.') > 0 ? u : null;
+    }
+
+    // Para onde o tempo de midia deve ir: o site que esta tocando, quando da
+    // para saber; senao, o proprio app.
+    static string AlvoDaMidia(string origem)
+    {
+        string o = (origem ?? "").ToLowerInvariant();
+        bool navegador = o.Contains("chrome") || o.Contains("edge") || o.Contains("brave")
+            || o.Contains("firefox") || o.Contains("opera") || o.Contains("vivaldi")
+            || o.Contains("msedge");
+        if (!navegador) return null;
+
+        var abertos = DominiosAbertosNoNavegador();
+        foreach (var conhecido in DominiosDeMidia)
+            foreach (var aberto in abertos)
+                if (aberto == conhecido || aberto.EndsWith("." + conhecido)) return aberto;
+
+        return abertos.Count == 1 ? abertos[0] : null;
+    }
+
     // ----------------------------------------------------------- midia
     // O Windows mantem uma sessao de midia para quem esta tocando (os botoes
     // de midia do teclado falam com ela). De la sai o app, o titulo e o
@@ -330,7 +397,10 @@ static class Probe
                     try { artista = (string)p.Artist; } catch { }
                 }
 
-                return new string[] { origem ?? "", titulo ?? "", artista ?? "" };
+                string alvo = null;
+                try { alvo = AlvoDaMidia(origem); } catch { }
+
+                return new string[] { origem ?? "", titulo ?? "", artista ?? "", alvo ?? "" };
             }
         }
         catch { /* uma sessao de midia problematica nao derruba o loop */ }
