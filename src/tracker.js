@@ -47,8 +47,10 @@ class Tracker extends EventEmitter {
     this.current = null;
     this.lastTs = 0;
     this.paused = false;
-    // Trilha paralela: o que está tocando, mesmo com a janela atrás de outra.
+    // Trilhas paralelas: o que está tocando e quem está com áudio rodando,
+    // mesmo com a janela atrás de outra.
     this.midia = null;
+    this.audios = new Map();
   }
 
   setConfig({ interval, idleAfter }) {
@@ -64,6 +66,7 @@ class Tracker extends EventEmitter {
     // A mídia corre por fora: vale mesmo com a janela atrás de outra, com o
     // Alt+Tab aberto ou com o usuário longe do teclado assistindo.
     this.feedMidia(sample.midia, ts);
+    this.feedAudio(sample.audio, ts);
 
     // Peça do shell em primeiro plano (Alt+Tab, bandeja, área de trabalho) não
     // é uso de nada: descarta a amostra e deixa o bloco atual de pé, para uma
@@ -132,6 +135,50 @@ class Tracker extends EventEmitter {
     }
   }
 
+  // Programas com áudio rodando: call do Discord, jogo com som, player que
+  // não aparece na sessão de mídia. Cada um tem o seu bloco, em paralelo.
+  feedAudio(lista, ts) {
+    const atuais = new Map();
+    for (const item of lista || []) {
+      const chave = String((item && item.exe) || '').toLowerCase();
+      if (chave) atuais.set(chave, item);
+    }
+
+    for (const chave of Array.from(this.audios.keys())) {
+      if (!atuais.has(chave)) this.closeAudio(chave, ts);
+    }
+
+    for (const [chave, item] of atuais) {
+      const bloco = this.audios.get(chave);
+      if (!bloco) {
+        this.audios.set(chave, { s: ts, e: ts, exe: item.exe, app: item.app || item.exe });
+      } else if (ts - bloco.e > this.interval * 3) {
+        // buraco grande: fecha o antigo e começa outro
+        this.closeAudio(chave, bloco.e);
+        this.audios.set(chave, { s: ts, e: ts, exe: item.exe, app: item.app || item.exe });
+      } else {
+        bloco.e = ts;
+      }
+    }
+  }
+
+  closeAudio(chave, end) {
+    const c = this.audios.get(chave);
+    this.audios.delete(chave);
+    if (!c) return;
+    const stop = Math.max(end || c.e, c.e);
+    const gap = stop - c.e;
+    const e = gap > this.interval * 1.5 ? c.e + this.interval : stop;
+    if (e - c.s < 5000) return;
+    // vai como trilha paralela: soma no tempo do app, sem duplicar o que já
+    // estava em primeiro plano
+    this.emit('segment', { s: c.s, e, midia: 1, audio: 1, exe: c.exe, app: c.app });
+  }
+
+  fecharTodosAudios(ts) {
+    for (const chave of Array.from(this.audios.keys())) this.closeAudio(chave, ts);
+  }
+
   closeMidia(end) {
     const c = this.midia;
     this.midia = null;
@@ -182,6 +229,7 @@ class Tracker extends EventEmitter {
 
   flush() {
     const agora = this.lastTs || Date.now();
+    this.fecharTodosAudios(agora);
     this.closeMidia(agora);
     const seg = this.close(agora);
     this.lastTs = 0;
@@ -193,6 +241,15 @@ class Tracker extends EventEmitter {
   // somar, os pedacos voltam a virar um bloco so.
   checkpoint(maxMs) {
     const now = this.lastTs || Date.now();
+
+    // call longa também vira pedaços de tempos em tempos, pra não se perder
+    // inteira num desligamento abrupto
+    for (const [chave, bloco] of Array.from(this.audios)) {
+      if (this.paused || now - bloco.s < maxMs) continue;
+      const copia = Object.assign({}, bloco);
+      this.closeAudio(chave, now);
+      this.audios.set(chave, Object.assign(copia, { s: now, e: now }));
+    }
 
     const m = this.midia;
     if (m && !this.paused && now - m.s >= maxMs) {

@@ -496,7 +496,7 @@ async function enviarSugestao(texto, nome) {
 
 // Busca a versão nova no GitHub Releases, baixa em segundo plano e instala
 // quando o app fecha. Só funciona empacotado: em desenvolvimento fica quieto.
-const updateState = { status: 'idle', version: null, percent: 0, error: null };
+const updateState = { status: 'idle', version: null, percent: 0, error: null, notas: '' };
 
 function updateInfo() {
   return {
@@ -504,6 +504,7 @@ function updateInfo() {
     version: updateState.version,
     percent: updateState.percent,
     error: updateState.error,
+    notas: updateState.notas,
     current: app.getVersion()
   };
 }
@@ -534,7 +535,17 @@ function setupUpdater() {
     updateState.percent = Math.round(p.percent || 0);
     pushUpdate('downloading');
   });
-  autoUpdater.on('update-downloaded', (i) => { updateState.version = i.version; pushUpdate('ready'); });
+  autoUpdater.on('update-downloaded', (i) => {
+    updateState.version = i.version;
+    // as notas vêm do texto da release no GitHub
+    const notas = typeof i.releaseNotes === 'string' ? i.releaseNotes : '';
+    updateState.notas = notas
+      .replace(/<[^>]+>/g, ' ')        // a GitHub às vezes devolve HTML
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+      .slice(0, 400);
+    pushUpdate('ready');
+  });
   autoUpdater.on('error', (err) => {
     updateState.error = err && err.message ? err.message : String(err);
     pushUpdate('error');
@@ -600,7 +611,16 @@ async function screenshotRun(dir) {
       await shot('sug-enviada');
     }
 
+    // simula uma versão nova chegando, só para conferir o cartão
     await go('hoje');
+    await run('S.update = { status: "ready", version: "1.6.0", current: "1.5.0",'
+      + ' notas: "Call do Discord agora conta como uso. Jogos da Steam aparecem com nome e ícone certos." };'
+      + ' renderView()');
+    await wait(600);
+    await shot('novidade');
+
+    await go('hoje');
+    await run('S.update = null; renderView()');
     await run('document.querySelector("#view").scrollTop = 99999');
     await wait(500);
     await shot('hoje-fim');

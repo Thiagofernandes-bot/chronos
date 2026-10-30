@@ -38,6 +38,7 @@ const S = {
   update: null,
   anterior: null,
   ultimaPagina: null,
+  novidadeAdiada: false,
   open: {},
   confirmClear: false
 };
@@ -61,11 +62,33 @@ function updateLine() {
   return UPDATE_TXT[u.status] || '';
 }
 
+// Versão nova não pode passar batida: vira um cartão no topo da tela, com o
+// que mudou e o botão. Enquanto baixa, uma linha discreta avisa que vem coisa.
 function updateBanner() {
   const u = S.update;
-  if (!u || u.status !== 'ready') return '';
-  return '<div class="banner ok"><b>Chronos ' + esc(u.version) + ' pronto para instalar</b>'
-    + '<button class="btn primary" data-act="update-install">Reiniciar e atualizar</button></div>';
+  if (!u || S.novidadeAdiada) return '';
+
+  if (u.status === 'downloading') {
+    return '<div class="banner"><b>Chronos ' + esc(u.version || '') + ' está chegando</b>'
+      + '<span class="num">' + (u.percent || 0) + '%</span></div>';
+  }
+
+  if (u.status !== 'ready') return '';
+
+  return '<div class="novidade">'
+    + '<div class="novidade-marca">'
+    + '<svg viewBox="0 0 24 24" aria-hidden="true">'
+    + '<rect width="24" height="24" rx="6.2" fill="#040605" />'
+    + '<path d="M12 12 L21.2 12 A9.2 9.2 0 1 1 12 2.8 Z" fill="#55d396" />'
+    + '</svg></div>'
+    + '<div class="novidade-txt">'
+    + '<b>Chronos ' + esc(u.version || '') + ' chegou</b>'
+    + '<p>' + esc(u.notas || 'Melhorias e correções. Reinicie para instalar — leva poucos segundos.') + '</p>'
+    + '</div>'
+    + '<div class="novidade-acoes">'
+    + '<button class="btn primary" data-act="update-install">Reiniciar e atualizar</button>'
+    + '<button class="btn" data-act="update-depois">Depois</button>'
+    + '</div></div>';
 }
 
 const $ = (sel) => document.querySelector(sel);
@@ -797,6 +820,7 @@ document.addEventListener('click', async (ev) => {
       toast('Procurando atualizações…');
     }
     if (what === 'update-install') await api.updateInstall();
+    if (what === 'update-depois') { S.novidadeAdiada = true; renderView(); return; }
     if (what === 'open-data') api.openData();
     if (what === 'export') {
       const r = S.page === 'hist'

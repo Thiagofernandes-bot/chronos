@@ -92,6 +92,22 @@ static class Probe
         var sb = new StringBuilder();
         sb.Append("{\"ts\":").Append(ts).Append(",\"idle\":").Append(idle);
 
+        // Programas com audio rodando agora (o navegador fica de fora: para
+        // ele vale o site, que a sessao de midia ja identifica).
+        var comAudio = ProcessosComAudio();
+        if (comAudio.Count > 0)
+        {
+            var partes = new List<string>();
+            foreach (int p in comAudio)
+            {
+                string exeAudio = ProcessName(p);
+                if (exeAudio == "?" || Browsers.Contains(exeAudio)) continue;
+                string[] infoAudio = AppInfo(p, exeAudio);
+                partes.Add("{\"exe\":" + Json(exeAudio) + ",\"app\":" + Json(infoAudio[0]) + "}");
+            }
+            if (partes.Count > 0) sb.Append(",\"audio\":[").Append(string.Join(",", partes)).Append("]");
+        }
+
         var midia = MidiaTocando();
         if (midia != null)
         {
@@ -387,6 +403,106 @@ static class Probe
                 if (aberto == conhecido || aberto.EndsWith("." + conhecido)) return aberto;
 
         return abertos.Count == 1 ? abertos[0] : null;
+    }
+
+    // ------------------------------------------------------------ audio
+    // Quem esta com transmissao de audio aberta agora. E o mesmo que o Mixer
+    // de Volume mostra. Numa call do Discord a transmissao fica aberta mesmo
+    // no silencio entre as falas — por isso o ESTADO vale mais que o volume:
+    // o volume zera a cada pausa e picotaria a call em pedacinhos.
+
+    [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")] class FabricaDeEnumerador { }
+
+    [ComImport, Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IMMDeviceEnumerator
+    {
+        int EnumAudioEndpoints(int fluxo, int estado, out IntPtr colecao);
+        int GetDefaultAudioEndpoint(int fluxo, int papel, out IMMDevice dispositivo);
+    }
+
+    [ComImport, Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IMMDevice
+    {
+        int Activate(ref Guid iid, int contexto, IntPtr parametros,
+            [MarshalAs(UnmanagedType.IUnknown)] out object iface);
+    }
+
+    [ComImport, Guid("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IAudioSessionManager2
+    {
+        int NaoUsado1(); int NaoUsado2();
+        int GetSessionEnumerator(out IAudioSessionEnumerator enumerador);
+    }
+
+    [ComImport, Guid("E2F5BB11-0570-40CA-ACDD-3AA01277DEE8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IAudioSessionEnumerator
+    {
+        int GetCount(out int quantidade);
+        int GetSession(int indice, out IAudioSessionControl sessao);
+    }
+
+    [ComImport, Guid("F4B1A599-7266-4319-A8CA-E70ACB11E8CD"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IAudioSessionControl { int GetState(out int estado); }
+
+    [ComImport, Guid("BFB7FF88-7239-4FC9-8FA2-07C950BE9C6D"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IAudioSessionControl2
+    {
+        // os nove primeiros vem de IAudioSessionControl: a ordem importa
+        int GetState(out int estado);
+        int GetDisplayName(out IntPtr nome);
+        int SetDisplayName(string nome, ref Guid contexto);
+        int GetIconPath(out IntPtr caminho);
+        int SetIconPath(string caminho, ref Guid contexto);
+        int GetGroupingParam(out Guid grupo);
+        int SetGroupingParam(ref Guid grupo, ref Guid contexto);
+        int RegisterAudioSessionNotification(IntPtr aviso);
+        int UnregisterAudioSessionNotification(IntPtr aviso);
+        int GetSessionIdentifier(out IntPtr id);
+        int GetSessionInstanceIdentifier(out IntPtr id);
+        int GetProcessId(out int pid);
+        int IsSystemSoundsSession();
+        int SetDuckingPreference(bool preferencia);
+    }
+
+    static bool audioIndisponivel = false;
+
+    // PIDs com transmissao de audio ativa neste instante.
+    static List<int> ProcessosComAudio()
+    {
+        var saida = new List<int>();
+        if (audioIndisponivel) return saida;
+        try
+        {
+            var enumerador = (IMMDeviceEnumerator)(new FabricaDeEnumerador() as object);
+            IMMDevice dispositivo;
+            if (enumerador.GetDefaultAudioEndpoint(0, 0, out dispositivo) != 0) return saida;
+
+            var iid = typeof(IAudioSessionManager2).GUID;
+            object bruto;
+            if (dispositivo.Activate(ref iid, 1, IntPtr.Zero, out bruto) != 0) return saida;
+
+            IAudioSessionEnumerator sessoes;
+            if (((IAudioSessionManager2)bruto).GetSessionEnumerator(out sessoes) != 0) return saida;
+
+            int quantas;
+            sessoes.GetCount(out quantas);
+            for (int i = 0; i < quantas; i++)
+            {
+                IAudioSessionControl sessao;
+                if (sessoes.GetSession(i, out sessao) != 0) continue;
+                var c2 = sessao as IAudioSessionControl2;
+                if (c2 == null) continue;
+
+                int estado;
+                if (c2.GetState(out estado) != 0 || estado != 1) continue; // 1 = AudioSessionStateActive
+
+                // som do sistema nao tem processo util e cai fora pelo pid
+                int pid;
+                if (c2.GetProcessId(out pid) == 0 && pid > 0 && !saida.Contains(pid)) saida.Add(pid);
+            }
+        }
+        catch { audioIndisponivel = true; }
+        return saida;
     }
 
     // ----------------------------------------------------------- midia

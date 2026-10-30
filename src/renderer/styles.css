@@ -497,6 +497,32 @@ input[type="color"] { width: 30px; height: 30px; padding: 0; border: 1px solid v
   background: rgba(85, 211, 150, .12); border-color: rgba(85, 211, 150, .34); color: var(--accent);
 }
 .banner .btn { margin-left: auto; padding: 6px 14px; }
+.banner .num { margin-left: auto; font-weight: 600; }
+
+/* Versão nova: cartão no topo, impossível de não ver. */
+.novidade {
+  display: flex; align-items: center; gap: 16px;
+  margin-bottom: 20px; padding: 16px 18px;
+  border-radius: var(--radius);
+  background: var(--glow), var(--card);
+  border: 1px solid rgba(85, 211, 150, .34);
+  box-shadow: var(--shadow);
+  animation: sobe .45s cubic-bezier(.2, .8, .2, 1) both;
+}
+.novidade-marca { width: 44px; height: 44px; border-radius: 12px; overflow: hidden; flex: none; }
+.novidade-marca svg { display: block; width: 100%; height: 100%; }
+.novidade-txt { min-width: 0; flex: 1; }
+.novidade-txt b { display: block; font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
+.novidade-txt p {
+  font-size: 12.5px; color: var(--txt-2); margin-top: 3px; line-height: 1.5;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.novidade-acoes { display: flex; gap: 8px; flex: none; }
+
+@media (max-width: 1120px) {
+  .novidade { flex-wrap: wrap; }
+  .novidade-acoes { width: 100%; }
+}
 .tip {
   position: fixed; z-index: 50; pointer-events: none;
   background: #000c; backdrop-filter: blur(8px);

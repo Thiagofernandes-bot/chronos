@@ -253,7 +253,9 @@ class Store {
       }
 
       const appKey = app + '\u0001' + (seg.exe || '');
-      juntar(frentePorAlvo, 'app:' + appKey, seg.s, seg.e);
+      // a chave é o NOME do app: é por ele que a trilha paralela (mídia e
+      // áudio) procura o que já estava na frente, para não contar duas vezes
+      juntar(frentePorAlvo, 'app:' + app, seg.s, seg.e);
       if (seg.dom) juntar(frentePorAlvo, 'site:' + seg.dom, seg.s, seg.e);
       let appAgg = byApp.get(appKey);
       if (!appAgg) {
