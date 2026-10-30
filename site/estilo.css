@@ -47,7 +47,7 @@ img{display:block;max-width:100%;height:auto}
 /* ------------------------------------------------------------- tipografia */
 .gigante{
   font-weight:600;letter-spacing:-.045em;line-height:.94;
-  font-size:clamp(3rem,7.6vw,6.2rem);
+  font-size:clamp(3rem,7.6vw,7rem);
 }
 .titulo{
   font-weight:600;letter-spacing:-.035em;line-height:1.04;
@@ -102,12 +102,13 @@ img{display:block;max-width:100%;height:auto}
 .fantasma:hover{border-color:rgba(255,255,255,.3);color:#fff;background:rgba(255,255,255,.03)}
 
 /* ---------------------------------------------------------------- herói */
-.heroi{position:relative;padding-top:168px;isolation:isolate;overflow-x:clip}
+.heroi{position:relative;padding-top:clamp(112px,13vh,168px);isolation:isolate;overflow-x:clip}
 .heroi::before{
   content:'';position:absolute;z-index:0;
   top:-260px;right:-200px;width:860px;height:860px;border-radius:50%;
   background:radial-gradient(circle,rgba(22,154,80,.26),rgba(22,154,80,0) 62%);
   filter:blur(30px);pointer-events:none;
+  animation:respira 12s ease-in-out infinite;
 }
 .heroi .env{position:relative}
 .heroi .grade{align-items:center}
@@ -167,7 +168,7 @@ img{display:block;max-width:100%;height:auto}
 .janela img{width:100%}
 
 /* a janela grande que fecha o herói */
-.palco{position:relative;margin-top:88px;padding-bottom:110px;isolation:isolate;perspective:2200px}
+.palco{position:relative;margin-top:clamp(40px,5vh,88px);padding-bottom:110px;isolation:isolate;perspective:2200px}
 .palco::before{
   content:'';position:absolute;z-index:0;left:50%;top:30px;translate:-50% 0;
   width:min(1100px,92vw);height:420px;border-radius:50%;
@@ -421,15 +422,31 @@ img{display:block;max-width:100%;height:auto}
 .tempo i{width:6px;height:6px;border-radius:50%;flex:none}
 .tempo b{color:#F2F5F3;font-weight:600}
 .tempo.longe{opacity:.5;scale:.84}
+/* fio apontando para a peca, com uma ponta no fim */
+.tempo::after,.tempo::before{content:'';position:absolute;top:50%;pointer-events:none}
+.tempo::after{height:1px;width:var(--fio,42px)}
+.tempo::before{width:4px;height:4px;border-radius:50%;background:rgba(85,211,150,.75);translate:0 -50%}
+.tempo.esq::after{left:100%;background:linear-gradient(90deg,rgba(85,211,150,.5),rgba(85,211,150,.05))}
+.tempo.dir::after{right:100%;background:linear-gradient(270deg,rgba(85,211,150,.5),rgba(85,211,150,.05))}
+.tempo.esq::before{left:calc(100% + var(--fio,42px) - 2px)}
+.tempo.dir::before{right:calc(100% + var(--fio,42px) - 2px)}
+
 @keyframes voa{from{translate:0 0}to{translate:var(--dx,8px) var(--dy,-16px)}}
 
-/* encostados na peca: longe demais eles viram enfeite solto no vazio */
-.t1{top:1%;left:7%;--dx:10px;--dy:-18px;--t:7.5s;--d:0s}
-.t2{top:30%;left:-9%;--dx:-12px;--dy:15px;--t:9s;--d:.8s}
-.t3{top:63%;left:1%;--dx:9px;--dy:17px;--t:8s;--d:.4s}
-.t4{top:11%;right:-13%;--dx:14px;--dy:13px;--t:9.5s;--d:1.2s}
-.t5{top:76%;right:-3%;--dx:-10px;--dy:-14px;--t:7s;--d:.6s}
+/* cada um ladeia o disco na altura em que o fio encosta nele */
+.t1{top:11%;left:-22%;--fio:42px;--dx:9px;--dy:-16px;--t:7.5s;--d:0s}
+.t2{top:40%;left:-34%;--fio:48px;--dx:-11px;--dy:14px;--t:9s;--d:.8s}
+.t3{top:73%;left:-18%;--fio:40px;--dx:8px;--dy:16px;--t:8s;--d:.4s}
+.t4{top:19%;right:-16%;--fio:46px;--dx:13px;--dy:12px;--t:9.5s;--d:1.2s}
+.t5{top:79%;right:-9%;--fio:38px;--dx:-9px;--dy:-13px;--t:7s;--d:.6s}
 
+@media (max-width:1366px){
+  .t4{display:none}
+  .t5{right:-2%}
+}
+@media (max-width:1280px){
+  .tempo{--fio:26px}
+}
 @media (max-width:1100px){
   .t2,.t4{display:none}
   .t1{left:2%}
@@ -637,3 +654,5 @@ img{display:block;max-width:100%;height:auto}
   .faixa > img{transform:scale(1.14)}
   .progresso{display:none}
 }
+
+@keyframes respira{0%,100%{opacity:.85;scale:1}50%{opacity:1;scale:1.07}}
