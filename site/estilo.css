@@ -47,7 +47,7 @@ img{display:block;max-width:100%;height:auto}
 /* ------------------------------------------------------------- tipografia */
 .gigante{
   font-weight:600;letter-spacing:-.045em;line-height:.94;
-  font-size:clamp(3rem,7.6vw,7rem);
+  font-size:clamp(2.8rem,7.2vw,5.6rem);
 }
 .titulo{
   font-weight:600;letter-spacing:-.035em;line-height:1.04;
@@ -117,8 +117,8 @@ img{display:block;max-width:100%;height:auto}
 .heroi-obj img{
   width:112%;max-width:none;margin-left:-6%;
   mix-blend-mode:screen;
-  -webkit-mask-image:radial-gradient(circle at 52% 50%,#000 54%,transparent 74%);
-          mask-image:radial-gradient(circle at 52% 50%,#000 54%,transparent 74%);
+  -webkit-mask-image:radial-gradient(circle at 52% 50%,#000 48%,transparent 68%);
+          mask-image:radial-gradient(circle at 52% 50%,#000 48%,transparent 68%);
 }
 @media (max-width:980px){
   .heroi{padding-top:124px}
@@ -329,8 +329,8 @@ img{display:block;max-width:100%;height:auto}
 .cta .env{position:relative}
 .cta img.obj{
   width:152px;margin:0 auto 34px;mix-blend-mode:screen;
-  -webkit-mask-image:radial-gradient(circle at 52% 50%,#000 52%,transparent 72%);
-          mask-image:radial-gradient(circle at 52% 50%,#000 52%,transparent 72%);
+  -webkit-mask-image:radial-gradient(circle at 52% 50%,#000 46%,transparent 66%);
+          mask-image:radial-gradient(circle at 52% 50%,#000 46%,transparent 66%);
 }
 .cta h2{margin-bottom:22px}
 .cta .lead{margin:0 auto;max-width:48ch}
@@ -594,7 +594,7 @@ img{display:block;max-width:100%;height:auto}
 .faixa .dito{max-width:640px}
 .faixa .dito .rotulo{display:block;margin-bottom:22px}
 .faixa p{
-  max-width:17ch;font-size:clamp(1.9rem,3.9vw,3.1rem);
+  max-width:18ch;font-size:clamp(1.9rem,3.9vw,3.1rem);
   font-weight:600;letter-spacing:-.035em;line-height:1.1;
 }
 .faixa p span{color:var(--apagado)}
