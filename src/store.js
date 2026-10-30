@@ -204,6 +204,8 @@ class Store {
 
     let activeMs = 0;
     let idleMs = 0;
+    let midiaMs = 0;
+    const byMidia = new Map();
     const byCat = new Map();
     const byApp = new Map();
     const bySite = new Map();
@@ -217,6 +219,22 @@ class Store {
     for (const seg of segs) {
       const ms = Math.max(0, seg.e - seg.s);
       if (!ms) continue;
+
+      // Mídia corre em paralelo ao primeiro plano: tem conta própria, não
+      // entra no tempo ativo (senão o dia passaria de 24h).
+      if (seg.midia) {
+        midiaMs += ms;
+        const artista = (seg.artista || '').trim();
+        const chave = (seg.app || '?') + '\u0001' + (artista || seg.titulo || '');
+        let fonte = byMidia.get(chave);
+        if (!fonte) {
+          fonte = { app: seg.app || '?', artista, ms: 0, titulos: new Map() };
+          byMidia.set(chave, fonte);
+        }
+        fonte.ms += ms;
+        if (seg.titulo) fonte.titulos.set(seg.titulo, (fonte.titulos.get(seg.titulo) || 0) + ms);
+        continue;
+      }
 
       if (seg.idle) { idleMs += ms; continue; }
       // Registro antigo de janela do shell: some na leitura, do mesmo jeito
@@ -307,6 +325,14 @@ class Store {
     const apps = appsTodos.filter((a) => a.ms >= minMs);
     const sites = sitesTodos.filter((s) => s.ms >= minMs);
 
+    const midia = {
+      totalMs: midiaMs,
+      fontes: Array.from(byMidia.values())
+        .filter((f) => f.ms >= minMs)
+        .map((f) => ({ app: f.app, artista: f.artista, ms: f.ms, titulos: topList(f.titulos, 10) }))
+        .sort((a, b) => b.ms - a.ms)
+    };
+
     // Lista para a tela de Categorias: cada app e cada site que apareceu de
     // verdade, com a categoria atual e se ela veio de escolha do usuário.
     const itens = [];
@@ -340,7 +366,7 @@ class Store {
     const result = {
       from: fromKey, to: toKey, days: keys.length,
       activeMs, idleMs, productiveMs,
-      categories, apps, sites, hours, ocultos, itens,
+      categories, apps, sites, hours, ocultos, itens, midia,
       byDay: Array.from(byDay.values()),
       catInfo,
       timeline: single ? this.buildTimeline(segs, cats, catInfo, atrib) : []

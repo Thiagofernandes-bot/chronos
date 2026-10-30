@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -77,6 +78,14 @@ static class Probe
 
         var sb = new StringBuilder();
         sb.Append("{\"ts\":").Append(ts).Append(",\"idle\":").Append(idle);
+
+        var midia = MidiaTocando();
+        if (midia != null)
+        {
+            sb.Append(",\"midia\":{\"app\":").Append(Json(midia[0]))
+              .Append(",\"titulo\":").Append(Json(midia[1]))
+              .Append(",\"artista\":").Append(Json(midia[2])).Append("}");
+        }
 
         if (hwnd == IntPtr.Zero)
         {
@@ -229,6 +238,102 @@ static class Probe
             }
         }
         catch { }
+        return null;
+    }
+
+    // ----------------------------------------------------------- midia
+    // O Windows mantem uma sessao de midia para quem esta tocando (os botoes
+    // de midia do teclado falam com ela). De la sai o app, o titulo e o
+    // "artista" - que no YouTube e o nome do canal - mesmo com a janela
+    // atras de outra. E assim que o tempo de video na tela secundaria conta.
+    //
+    // As APIs sao WinRT: no .NET Framework elas so chegam por reflexao.
+    static object gerenciadorMidia = null;
+    static bool midiaIndisponivel = false;
+    static MethodInfo asTaskGenerico = null;
+
+    static Type TipoWinRT(string nome, string assembly)
+    {
+        try { return Type.GetType(nome + ", " + assembly + ", ContentType=WindowsRuntime"); }
+        catch { return null; }
+    }
+
+    static object EsperarWinRT(object operacao, Type tipoResultado)
+    {
+        if (operacao == null || tipoResultado == null) return null;
+        try
+        {
+            if (asTaskGenerico == null)
+            {
+                foreach (var m in typeof(System.WindowsRuntimeSystemExtensions).GetMethods())
+                {
+                    if (m.Name != "AsTask") continue;
+                    var ps = m.GetParameters();
+                    if (ps.Length == 1 && ps[0].ParameterType.Name == "IAsyncOperation`1")
+                    { asTaskGenerico = m; break; }
+                }
+            }
+            if (asTaskGenerico == null) return null;
+
+            var tarefa = (Task)asTaskGenerico.MakeGenericMethod(tipoResultado)
+                .Invoke(null, new object[] { operacao });
+            if (!tarefa.Wait(1500)) return null;
+            return tarefa.GetType().GetProperty("Result").GetValue(tarefa, null);
+        }
+        catch { return null; }
+    }
+
+    static void PrepararMidia()
+    {
+        var tipo = TipoWinRT("Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager",
+            "Windows.Media.Control");
+        if (tipo == null) { midiaIndisponivel = true; return; }
+        try
+        {
+            var pedido = tipo.GetMethod("RequestAsync", BindingFlags.Public | BindingFlags.Static)
+                .Invoke(null, null);
+            gerenciadorMidia = EsperarWinRT(pedido, tipo);
+        }
+        catch { gerenciadorMidia = null; }
+        if (gerenciadorMidia == null) midiaIndisponivel = true;
+    }
+
+    // Devolve {app, titulo, artista} de quem esta tocando agora, ou null.
+    static string[] MidiaTocando()
+    {
+        if (midiaIndisponivel) return null;
+        if (gerenciadorMidia == null) PrepararMidia();
+        if (gerenciadorMidia == null) return null;
+
+        try
+        {
+            dynamic gerenciador = gerenciadorMidia;
+            var sessoes = gerenciador.GetSessions();
+            foreach (dynamic sessao in sessoes)
+            {
+                var estado = sessao.GetPlaybackInfo();
+                if (estado == null) continue;
+                if (estado.PlaybackStatus.ToString() != "Playing") continue;
+
+                string origem = "";
+                try { origem = (string)sessao.SourceAppUserModelId; } catch { }
+
+                string titulo = "", artista = "";
+                var tipoProps = TipoWinRT(
+                    "Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties",
+                    "Windows.Media.Control");
+                object props = EsperarWinRT(sessao.TryGetMediaPropertiesAsync(), tipoProps);
+                if (props != null)
+                {
+                    dynamic p = props;
+                    try { titulo = (string)p.Title; } catch { }
+                    try { artista = (string)p.Artist; } catch { }
+                }
+
+                return new string[] { origem ?? "", titulo ?? "", artista ?? "" };
+            }
+        }
+        catch { /* uma sessao de midia problematica nao derruba o loop */ }
         return null;
     }
 

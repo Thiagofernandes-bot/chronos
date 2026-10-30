@@ -382,7 +382,36 @@ function viewHoje() {
     + '<span>apps e sites na mesma lista</span></div>'
     + rankRows(mixTop(st), 'app') + notaOcultos(st) + '</div>';
 
+  html += secaoMidia(st);
+
   return html;
+}
+
+// Vídeo e música tocando enquanto você faz outra coisa. Fica numa conta à
+// parte de propósito: esse tempo acontece em cima do tempo ativo, então somar
+// tudo num número só daria um dia de mais de 24 horas.
+function secaoMidia(st) {
+  const m = st.midia;
+  if (!m || !m.fontes || !m.fontes.length) return '';
+
+  const itens = m.fontes.map((f) => ({
+    app: f.artista || f.app,
+    exe: null,
+    sub: f.artista
+      ? f.app + ' · ' + f.titulos.length + (f.titulos.length === 1 ? ' item' : ' itens')
+      : f.app,
+    ms: f.ms,
+    cat: 'outros',
+    color: '#E8B23A',
+    top: f.titulos
+  }));
+
+  return '<div class="sec"><div class="sec-h"><h2>Tocando em segundo plano</h2>'
+    + '<span class="num">' + fmt(m.totalMs) + ' no período</span></div>'
+    + rankRows(itens, 'app')
+    + '<p class="cap">conta mesmo com a janela atrás de outra ou na segunda tela — '
+    + 'por isso este tempo corre por fora do tempo ativo. No YouTube, o nome é o do canal.</p>'
+    + '</div>';
 }
 
 function fact(label, value) {

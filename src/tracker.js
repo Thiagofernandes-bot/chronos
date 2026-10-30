@@ -47,6 +47,8 @@ class Tracker extends EventEmitter {
     this.current = null;
     this.lastTs = 0;
     this.paused = false;
+    // Trilha paralela: o que está tocando, mesmo com a janela atrás de outra.
+    this.midia = null;
   }
 
   setConfig({ interval, idleAfter }) {
@@ -58,6 +60,10 @@ class Tracker extends EventEmitter {
     if (this.paused) return;
     const ts = sample.ts || Date.now();
     const idle = (sample.idle || 0) * 1000 >= this.idleAfter;
+
+    // A mídia corre por fora: vale mesmo com a janela atrás de outra, com o
+    // Alt+Tab aberto ou com o usuário longe do teclado assistindo.
+    this.feedMidia(sample.midia, ts);
 
     // Peça do shell em primeiro plano (Alt+Tab, bandeja, área de trabalho) não
     // é uso de nada: descarta a amostra e deixa o bloco atual de pé, para uma
@@ -98,6 +104,47 @@ class Tracker extends EventEmitter {
     this.emit('change', this.snapshot());
   }
 
+  // Abre, estende e fecha o bloco de mídia. Independe de qual janela está na
+  // frente: o que manda é a sessão de mídia do Windows dizer "tocando".
+  feedMidia(m, ts) {
+    const tocando = m && (m.titulo || m.artista || m.app);
+    const key = tocando ? [m.app, m.artista, m.titulo].join('\u0001') : null;
+
+    if (this.midia && this.midia.key !== key) this.closeMidia(ts);
+    if (!tocando) return;
+
+    if (!this.midia) {
+      this.midia = {
+        key, s: ts, e: ts,
+        app: (m.app || '').trim(),
+        artista: (m.artista || '').trim(),
+        titulo: (m.titulo || '').trim()
+      };
+    } else {
+      // Buraco grande (PC suspenso, probe reiniciado): fecha e recomeça.
+      if (ts - this.midia.e > this.interval * 3) {
+        this.closeMidia(this.midia.e);
+        this.feedMidia(m, ts);
+        return;
+      }
+      this.midia.e = ts;
+    }
+  }
+
+  closeMidia(end) {
+    const c = this.midia;
+    this.midia = null;
+    if (!c) return;
+    const stop = Math.max(end || c.e, c.e);
+    const gap = stop - c.e;
+    const e = gap > this.interval * 1.5 ? c.e + this.interval : stop;
+    if (e - c.s < 5000) return; // menos de 5s não é "assistir"
+    this.emit('segment', {
+      s: c.s, e, midia: 1,
+      app: c.app, artista: c.artista, titulo: c.titulo
+    });
+  }
+
   keyOf(seg) {
     if (seg.idle) return 'idle';
     return [seg.exe, seg.app, seg.url || '', seg.title].join('\u0001');
@@ -133,7 +180,9 @@ class Tracker extends EventEmitter {
   }
 
   flush() {
-    const seg = this.close(this.lastTs || Date.now());
+    const agora = this.lastTs || Date.now();
+    this.closeMidia(agora);
+    const seg = this.close(agora);
     this.lastTs = 0;
     return seg;
   }
@@ -142,9 +191,17 @@ class Tracker extends EventEmitter {
   // que um desligamento abrupto nao leve embora horas de registro. Na hora de
   // somar, os pedacos voltam a virar um bloco so.
   checkpoint(maxMs) {
+    const now = this.lastTs || Date.now();
+
+    const m = this.midia;
+    if (m && !this.paused && now - m.s >= maxMs) {
+      const copiaM = Object.assign({}, m);
+      this.closeMidia(now);
+      this.midia = Object.assign(copiaM, { s: now, e: now });
+    }
+
     const c = this.current;
     if (!c || this.paused) return;
-    const now = this.lastTs || Date.now();
     if (now - c.s < maxMs) return;
     const copy = Object.assign({}, c);
     this.close(now);
