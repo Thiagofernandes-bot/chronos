@@ -656,3 +656,49 @@ img{display:block;max-width:100%;height:auto}
 }
 
 @keyframes respira{0%,100%{opacity:.85;scale:1}50%{opacity:1;scale:1.07}}
+
+/* ======================================================= o dia em quatro nos */
+/* Substituiu a faixa de vidro com a frase. O CSS da faixa continua no arquivo,
+   inerte: tentei remove-lo e desbalanceei as chaves, nao vale o risco. */
+.nos{
+  position:relative;isolation:isolate;overflow:hidden;
+  border-block:1px solid var(--linha);
+  padding-block:clamp(84px,11vw,140px);
+}
+.nos::after{
+  content:'';position:absolute;z-index:-1;inset:0;pointer-events:none;
+  background-image:
+    linear-gradient(to right,rgba(255,255,255,.05) 1px,transparent 1px),
+    linear-gradient(to bottom,rgba(255,255,255,.05) 1px,transparent 1px);
+  background-size:76px 76px;
+  -webkit-mask-image:radial-gradient(90% 90% at 30% 40%,#000 8%,transparent 72%);
+          mask-image:radial-gradient(90% 90% at 30% 40%,#000 8%,transparent 72%);
+}
+.nos .cabeca{margin-bottom:clamp(44px,5vw,64px)}
+
+.quatro{
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+  border-top:1px solid var(--linha-forte);
+}
+.no{padding:34px 26px 36px 0;border-bottom:1px solid var(--linha)}
+.no + .no{padding-left:26px;border-left:1px solid var(--linha)}
+.no b{
+  display:block;font-weight:600;letter-spacing:-.05em;line-height:.92;
+  font-size:clamp(2.5rem,4.2vw,3.6rem);margin-bottom:18px;
+  font-variant-numeric:tabular-nums;
+}
+.no b span{font-size:.4em;color:var(--apagado);letter-spacing:-.02em;margin-left:.03em}
+.no p{font-size:.95rem;line-height:1.56;color:#949E99;max-width:25ch}
+/* o que importa na frase fica claro, o resto recua */
+.no em{font-style:normal;color:#DDE4E0}
+
+@media (max-width:980px){
+  .quatro{grid-template-columns:1fr 1fr}
+  .no:nth-child(odd){padding-left:0;border-left:0}
+  .no:nth-child(even){padding-left:24px;border-left:1px solid var(--linha)}
+}
+@media (max-width:600px){
+  .quatro{grid-template-columns:1fr}
+  .no,.no + .no,.no:nth-child(even){padding:26px 0;border-left:0;padding-left:0}
+  .no p{max-width:none}
+}
