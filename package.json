@@ -65,7 +65,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "shortcutName": "Chronos",
-      "artifactName": "Chronos-instalador-${version}.exe"
+      "artifactName": "Chronos-instalador.exe"
     },
     "portable": {
       "artifactName": "Chronos-portatil-${version}.exe"

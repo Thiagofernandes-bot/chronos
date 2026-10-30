@@ -1,0 +1,21 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "cleanUrls": true,
+  "redirects": [
+    {
+      "source": "/baixar",
+      "destination": "https://github.com/Thiagofernandes-bot/chronos/releases/latest/download/Chronos-instalador.exe",
+      "permanent": false
+    }
+  ],
+  "headers": [
+    {
+      "source": "/fontes/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+    },
+    {
+      "source": "/imagens/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
+    }
+  ]
+}
