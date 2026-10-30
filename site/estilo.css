@@ -33,8 +33,8 @@ body{
 
 /* grão por cima de tudo, bem de leve */
 body::after{
-  content:'';position:fixed;inset:0;z-index:99;pointer-events:none;opacity:.05;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  content:'';position:fixed;inset:0;z-index:99;pointer-events:none;opacity:.095;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.72' numOctaves='4'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 a{color:inherit;text-decoration:none}
@@ -370,4 +370,137 @@ img{display:block;max-width:100%;height:auto}
   .palco .janela{transform:none}
   .palco.acende .varre::before{animation:none}
   .pilula:hover,.bloco:hover{transform:none}
+}
+
+/* ================================================================ grade */
+/* linhas finas atras do heroi e do bloco final, apagando nas pontas */
+.heroi::after,.cta::after{
+  content:'';position:absolute;z-index:-1;inset:0;pointer-events:none;
+  background-image:
+    linear-gradient(to right,rgba(255,255,255,.05) 1px,transparent 1px),
+    linear-gradient(to bottom,rgba(255,255,255,.042) 1px,transparent 1px);
+  background-size:76px 76px;
+}
+.heroi::after{
+  -webkit-mask-image:radial-gradient(124% 72% at 50% 24%,#000 16%,transparent 70%);
+          mask-image:radial-gradient(124% 72% at 50% 24%,#000 16%,transparent 70%);
+}
+.cta::after{
+  -webkit-mask-image:radial-gradient(70% 70% at 50% 50%,#000 10%,transparent 68%);
+          mask-image:radial-gradient(70% 70% at 50% 50%,#000 10%,transparent 68%);
+}
+
+/* ====================================================== peca do heroi */
+.heroi-obj{position:relative}
+/* o mouse afasta a peca; a orbita anda mais, e isso vira profundidade */
+.peca{
+  transform:translate3d(calc(var(--px,0) * -16px),calc(var(--py,0) * -12px),0);
+  transition:transform .6s cubic-bezier(.2,.8,.2,1);
+}
+.balanca{animation:flutua 9s ease-in-out infinite}
+@keyframes flutua{
+  0%,100%{transform:translate3d(0,0,0) rotate(0deg)}
+  50%    {transform:translate3d(0,-18px,0) rotate(-1.4deg)}
+}
+
+/* ------------------------------------------------ recortes voando */
+.orbita{
+  position:absolute;inset:0;pointer-events:none;
+  transform:translate3d(calc(var(--px,0) * 26px),calc(var(--py,0) * 18px),0);
+  transition:transform .6s cubic-bezier(.2,.8,.2,1);
+}
+.tempo{
+  position:absolute;display:inline-flex;align-items:center;gap:8px;white-space:nowrap;
+  padding:8px 14px 8px 11px;border-radius:100px;
+  border:1px solid rgba(255,255,255,.1);
+  background:rgba(9,13,11,.66);backdrop-filter:blur(10px);
+  font-size:.8rem;color:#BDC7C2;letter-spacing:-.01em;
+  box-shadow:0 12px 34px -16px rgba(0,0,0,.95);
+  animation:voa var(--t,7s) ease-in-out var(--d,0s) infinite alternate;
+}
+.tempo i{width:6px;height:6px;border-radius:50%;flex:none}
+.tempo b{color:#F2F5F3;font-weight:600}
+.tempo.longe{opacity:.5;scale:.84}
+@keyframes voa{from{translate:0 0}to{translate:var(--dx,8px) var(--dy,-16px)}}
+
+/* encostados na peca: longe demais eles viram enfeite solto no vazio */
+.t1{top:1%;left:7%;--dx:10px;--dy:-18px;--t:7.5s;--d:0s}
+.t2{top:30%;left:-9%;--dx:-12px;--dy:15px;--t:9s;--d:.8s}
+.t3{top:63%;left:1%;--dx:9px;--dy:17px;--t:8s;--d:.4s}
+.t4{top:11%;right:-13%;--dx:14px;--dy:13px;--t:9.5s;--d:1.2s}
+.t5{top:76%;right:-3%;--dx:-10px;--dy:-14px;--t:7s;--d:.6s}
+
+@media (max-width:1100px){
+  .t2,.t4{display:none}
+  .t1{left:2%}
+  .t3{left:-2%}
+}
+@media (max-width:980px){
+  .tempo{font-size:.74rem;padding:6px 12px 6px 9px}
+  .t1{top:-2%;left:-10%}
+  .t3{display:none}
+  .t5{top:80%;right:-12%}
+}
+@media (max-width:420px){
+  .t1{left:-8%}
+  .t5{right:-8%}
+}
+
+/* ============================================ palavra que fica trocando */
+.gira{
+  display:inline-block;position:relative;
+  transition:width .5s cubic-bezier(.2,.8,.2,1);
+}
+.gira .p{display:inline-block;animation:entra-palavra .42s cubic-bezier(.2,.8,.2,1) both}
+/* a que sai deixa o fluxo, para a que entra mandar na linha de base */
+.gira .p.fora{position:absolute;left:0;top:0;animation:sai-palavra .34s cubic-bezier(.4,0,.6,1) both}
+@keyframes entra-palavra{from{transform:translateY(.32em);opacity:0}to{transform:none;opacity:1}}
+@keyframes sai-palavra{from{transform:none;opacity:1}  to{transform:translateY(-.32em);opacity:0}}
+.gira .medidor{
+  position:absolute;left:0;top:0;visibility:hidden;
+  pointer-events:none;white-space:nowrap;
+}
+
+/* =============================================================== cursor */
+.cur-ponto,.cur-anel{display:none}
+
+@media (hover:hover) and (pointer:fine){
+  html.cursor-vivo,html.cursor-vivo *{cursor:none}
+  .cur-ponto,.cur-anel{
+    display:block;position:fixed;top:0;left:0;z-index:200;
+    pointer-events:none;border-radius:50%;
+    opacity:0;transition:opacity .3s;
+  }
+  .cursor-vivo .cur-ponto,.cursor-vivo .cur-anel{opacity:1}
+  .cur-ponto{
+    width:7px;height:7px;margin:-3.5px 0 0 -3.5px;
+    background:var(--verde);
+    box-shadow:0 0 0 1px rgba(0,0,0,.4),0 0 12px rgba(85,211,150,.55);
+  }
+  .cur-anel{
+    width:34px;height:34px;margin:-17px 0 0 -17px;
+    border:1px solid rgba(85,211,150,.45);
+    transition:opacity .3s,width .25s,height .25s,margin .25s,
+               background .25s,border-color .25s;
+  }
+  /* em cima de algo clicavel o anel abre e acende */
+  .cursor-vivo.perto .cur-anel{
+    width:56px;height:56px;margin:-28px 0 0 -28px;
+    background:rgba(85,211,150,.1);border-color:rgba(85,211,150,.8);
+  }
+  .cursor-vivo.aperta .cur-anel{
+    width:26px;height:26px;margin:-13px 0 0 -13px;
+    background:rgba(85,211,150,.22);
+  }
+}
+
+/* ===================================== quem pediu menos movimento */
+@media (prefers-reduced-motion:reduce){
+  .balanca{animation:none}
+  .tempo{animation:none}
+  .peca,.orbita{transform:none}
+  .gira{transition:none}
+  .gira .p,.gira .p.fora{animation:none}
+  .cur-ponto,.cur-anel{display:none!important}
+  html.cursor-vivo,html.cursor-vivo *{cursor:auto}
 }

@@ -49,7 +49,8 @@
       <div class="grade">
         <div class="heroi-txt">
           <span class="selo"><i></i> versão 1.6 · Windows 10 e 11</span>
-          <h1 class="gigante">Para onde<br>o seu dia<br><em>foi.</em></h1>
+          <!-- sem JS fica "foi." parado, que ja e uma frase inteira -->
+          <h1 class="gigante">Para onde<br>o seu dia<br><em class="gira" data-palavras="foi.|some.|vai.|escapa.">foi.</em></h1>
           <p class="lead">O Chronos fica rodando no canto e mede quanto tempo você passou em cada programa e em cada site do navegador. Sem nuvem, sem conta, sem assinatura.</p>
           <div class="acoes">
             <a class="pilula g" href="/baixar">
@@ -61,7 +62,19 @@
           <p class="miudo"><b>Grátis.</b> Instalador de um clique, atualiza sozinho daí em diante.</p>
         </div>
         <div class="heroi-obj">
-          <img src="/imagens/vidro-marca.jpg" width="1400" height="1400" alt="" fetchpriority="high">
+          <div class="peca">
+            <div class="balanca">
+              <img src="/imagens/vidro-marca.jpg" width="1400" height="1400" alt="" fetchpriority="high">
+            </div>
+          </div>
+          <!-- pedaços de um dia real girando em volta da peça -->
+          <div class="orbita" aria-hidden="true">
+            <span class="tempo t1"><i style="background:#E4664F"></i>Figma <b>2h51</b></span>
+            <span class="tempo t2 longe"><i style="background:#6FCF97"></i>youtube.com <b>55min</b></span>
+            <span class="tempo t3"><i style="background:#D8A92B"></i>Discord <b>1h25</b></span>
+            <span class="tempo t4 longe"><i style="background:#5AA9E6"></i>app.clickup.com <b>54min</b></span>
+            <span class="tempo t5"><i style="background:#3FBF7F"></i>instagram.com <b>49min</b></span>
+          </div>
         </div>
       </div>
     </div>
@@ -269,6 +282,9 @@
     <p>Feito por gosto, não por empresa. · v1.6</p>
   </div>
 </footer>
+
+<i class="cur-ponto" aria-hidden="true"></i>
+<i class="cur-anel" aria-hidden="true"></i>
 
 <script src="/script.js" defer></script>
 </body>
