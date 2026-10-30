@@ -14,7 +14,9 @@ const EXES_IGNORADOS = new Set([
   'shellexperiencehost', 'startmenuexperiencehost', 'searchhost', 'searchapp',
   'searchui', 'textinputhost', 'lockapp', 'applicationframehost', 'dwm',
   'sihost', 'peopleexperiencehost', 'windowsinternal.composableshell.experiences.textinput.inputapp',
-  'msedgewebview2', 'steamwebhelper', 'crashpad_handler', 'widgets', 'widgetboard'
+  'msedgewebview2', 'steamwebhelper', 'crashpad_handler', 'widgets', 'widgetboard',
+  // processo nulo do Windows: aparece quando a janela em foco não tem dono
+  'idle', 'system', '?'
 ]);
 
 // Títulos que o shell usa nas próprias janelas invisíveis.
@@ -70,8 +72,33 @@ function ehRuido(exe, title) {
   return false;
 }
 
+// Jogo de loja guarda o nome bonito na pasta (steamapps\common\THE FINALS),
+// enquanto o executável costuma ter nome interno — "Discovery.exe", no caso.
+const PASTAS_DE_JOGO = [
+  /\\steamapps\\common\\([^\\]+)\\/i,
+  /\\Epic Games\\([^\\]+)\\/i,
+  /\\GOG Games\\([^\\]+)\\/i,
+  /\\Riot Games\\([^\\]+)\\/i,
+  /\\Origin Games\\([^\\]+)\\/i
+];
+
+function nomeDePastaDeJogo(caminho) {
+  if (!caminho) return null;
+  for (const padrao of PASTAS_DE_JOGO) {
+    const achou = String(caminho).match(padrao);
+    if (achou) {
+      const nome = achou[1].trim();
+      if (nome.length > 1 && norm(nome) !== 'bin') return nome;
+    }
+  }
+  return null;
+}
+
 /** Nome de exibição do aplicativo, já sem lixo de fabricante. */
-function nomeApp(app, exe) {
+function nomeApp(app, exe, caminho) {
+  const doJogo = nomeDePastaDeJogo(caminho);
+  if (doJogo) return doJogo;
+
   const e = norm(exe);
   if (NOMES_CONHECIDOS[e]) return NOMES_CONHECIDOS[e];
 
@@ -90,9 +117,18 @@ function nomeApp(app, exe) {
   return nome.trim() || String(exe || '?');
 }
 
+// Caracteres invisíveis que alguns jogos espalham no título da janela para
+// atrapalhar leitura automática. Sem tirar, cada leitura vira um título
+// diferente e o tempo nunca soma.
+const INVISIVEIS = /[​-‏‪-‮⁠﻿­]/g;
+
+function semInvisiveis(texto) {
+  return String(texto || '').replace(INVISIVEIS, '').replace(/\s{2,}/g, ' ').trim();
+}
+
 /** Título da janela sem o sufixo do próprio programa. */
 function tituloLimpo(title, app, exe) {
-  let t = String(title || '').trim();
+  let t = semInvisiveis(title);
   if (!t) return '';
 
   const sufixos = [app, exe, NOMES_CONHECIDOS[norm(exe)]].filter(Boolean);
@@ -103,4 +139,6 @@ function tituloLimpo(title, app, exe) {
   return t.trim();
 }
 
-module.exports = { ehRuido, nomeApp, tituloLimpo, NOMES_CONHECIDOS };
+module.exports = {
+  ehRuido, nomeApp, tituloLimpo, semInvisiveis, nomeDePastaDeJogo, NOMES_CONHECIDOS
+};

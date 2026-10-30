@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { corDe, NEUTRA } = require('./cores');
-const { ehRuido, nomeApp, tituloLimpo } = require('./ruido');
+const { ehRuido, nomeApp, tituloLimpo, semInvisiveis } = require('./ruido');
 const { duracao, subtrair, juntar } = require('./intervalos');
 
 const DEFAULT_SETTINGS = {
@@ -229,8 +229,9 @@ class Store {
       if (ehRuido(seg.exe, seg.title)) continue;
       activeMs += ms;
 
-      const app = nomeApp(seg.app, seg.exe);
-      const title = seg.browser ? (seg.title || '') : tituloLimpo(seg.title, app, seg.exe);
+      // o caminho aprendido ajuda a dar nome a jogo com executável críptico
+      const app = nomeApp(seg.app, seg.exe, this.apps[String(seg.exe || '').toLowerCase()]);
+      const title = seg.browser ? semInvisiveis(seg.title) : tituloLimpo(seg.title, app, seg.exe);
       // Nos gráficos empilhados, a divisão é por app — no navegador, por site,
       // que é o que de fato estava em uso.
       const fatia = seg.dom || app;
@@ -370,7 +371,7 @@ class Store {
       .sort((a, b) => a.s - b.s);
     const out = [];
     for (const seg of sorted) {
-      const nome = nomeApp(seg.app, seg.exe);
+      const nome = nomeApp(seg.app, seg.exe, this.apps[String(seg.exe || '').toLowerCase()]);
       const last = out[out.length - 1];
       if (last && last.app === nome && seg.s - last.e < 60000) {
         last.e = Math.max(last.e, seg.e);

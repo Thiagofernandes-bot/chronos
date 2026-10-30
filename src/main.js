@@ -176,13 +176,70 @@ function iconeDePacoteDaStore(exePath) {
   return null;
 }
 
-async function iconFor(exe) {
+// Terceira fonte de ícone: os atalhos do menu iniciar. É assim que jogo de
+// Steam se resolve — o executável não tem ícone embutido ("Discovery.exe"),
+// mas o atalho aponta para o .ico que o Steam baixou.
+let atalhos = null;
+
+function mapaDeAtalhos() {
+  if (atalhos) return atalhos;
+  atalhos = {};
+
+  const raizes = [
+    path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
+    path.join(process.env.PROGRAMDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs')
+  ];
+
+  const varrer = (dir, nivel) => {
+    if (nivel > 2) return;
+    let itens = [];
+    try { itens = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return; }
+    for (const item of itens) {
+      const alvo = path.join(dir, item.name);
+      if (item.isDirectory()) { varrer(alvo, nivel + 1); continue; }
+      if (!/\.url$/i.test(item.name)) continue;
+      try {
+        const conteudo = fs.readFileSync(alvo, 'utf8');
+        const achou = conteudo.match(/^IconFile=(.+)$/im);
+        if (!achou) continue;
+        const ico = achou[1].trim();
+        if (ico) atalhos[chaveDeNome(item.name.replace(/\.url$/i, ''))] = ico;
+      } catch (e) { /* atalho ilegível, segue */ }
+    }
+  };
+
+  for (const raiz of raizes) varrer(raiz, 0);
+  return atalhos;
+}
+
+function chaveDeNome(nome) {
+  return String(nome || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]/gi, '')
+    .toLowerCase();
+}
+
+function iconeDeAtalho(nome) {
+  const caminho = mapaDeAtalhos()[chaveDeNome(nome)];
+  if (!caminho || !fs.existsSync(caminho)) return null;
+  try {
+    const img = nativeImage.createFromPath(caminho);
+    if (img && !img.isEmpty()) return img.resize({ width: 48, height: 48 }).toDataURL();
+  } catch (e) { /* ignora */ }
+  return null;
+}
+
+async function iconFor(exe, nome) {
   const key = (exe || '').toLowerCase();
   if (!key) return null;
   if (key in iconCache) return iconCache[key];
 
   const exePath = store.apps[key];
-  if (!exePath || !fs.existsSync(exePath)) { iconCache[key] = null; return null; }
+  if (!exePath || !fs.existsSync(exePath)) {
+    const deAtalho = nome ? iconeDeAtalho(nome) : null;
+    iconCache[key] = deAtalho;
+    return deAtalho;
+  }
 
   let data = null;
   try {
@@ -195,6 +252,7 @@ async function iconFor(exe) {
   const generico = await assinaturaDoIconeGenerico();
   if (data && generico && data === generico) data = null;
   if (!data) data = iconeDePacoteDaStore(exePath);
+  if (!data && nome) data = iconeDeAtalho(nome);
 
   iconCache[key] = data;
   return data;
@@ -202,8 +260,12 @@ async function iconFor(exe) {
 
 async function iconsFor(list) {
   const out = {};
-  for (const exe of list || []) {
-    const data = await iconFor(exe);
+  for (const item of list || []) {
+    // aceita tanto "chrome" quanto { exe: 'chrome', nome: 'Google Chrome' }
+    const exe = typeof item === 'string' ? item : (item && item.exe);
+    const nome = typeof item === 'string' ? null : (item && item.nome);
+    if (!exe) continue;
+    const data = await iconFor(exe, nome);
     if (data) out[String(exe).toLowerCase()] = data;
   }
   return out;

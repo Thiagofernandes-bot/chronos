@@ -77,16 +77,20 @@ const ICON_CACHE = {};
 // dominio -> favicon (so quando o usuario liga a busca na internet).
 let SITE_ICON_CACHE = {};
 
-async function ensureIcons(exes) {
-  const missing = [];
-  for (const e of exes || []) {
-    const k = (e || '').toLowerCase();
-    if (k && !(k in ICON_CACHE) && missing.indexOf(k) < 0) missing.push(k);
+async function ensureIcons(itens) {
+  const faltando = [];
+  const vistos = {};
+  for (const it of itens || []) {
+    const exe = typeof it === 'string' ? it : (it && it.exe);
+    const k = (exe || '').toLowerCase();
+    if (!k || (k in ICON_CACHE) || vistos[k]) continue;
+    vistos[k] = 1;
+    faltando.push({ exe: k, nome: typeof it === 'string' ? null : (it && it.nome) });
   }
-  if (!missing.length) return;
+  if (!faltando.length) return;
   let got = {};
-  try { got = await api.icons(missing); } catch (e) { /* segue com as iniciais */ }
-  for (const k of missing) ICON_CACHE[k] = got[k] || null;
+  try { got = await api.icons(faltando); } catch (e) { /* segue com as iniciais */ }
+  for (const f of faltando) ICON_CACHE[f.exe] = got[f.exe] || null;
 }
 
 async function ensureSiteIcons(doms) {
@@ -697,7 +701,7 @@ async function load(keepScroll) {
   S.stats = st;
   // Ícone de programa é local e instantâneo; favicon vem da internet, então
   // a tela não espera por ele.
-  await ensureIcons(st.apps.map((a) => a.exe));
+  await ensureIcons(st.apps.map((a) => ({ exe: a.exe, nome: a.app })));
   render();
   $('#view').scrollTop = top;
 
@@ -865,7 +869,7 @@ document.addEventListener('mousemove', (ev) => {
     const was = S.live;
     S.live = data;
     const exe = data.current && data.current.exe;
-    if (exe && !((exe || '').toLowerCase() in ICON_CACHE)) ensureIcons([exe]).then(renderNow);
+    if (exe && !((exe || '').toLowerCase() in ICON_CACHE)) ensureIcons([{ exe, nome: data.current && data.current.app }]).then(renderNow);
     else renderNow();
     // Atualiza os numeros da tela Hoje sem redesenhar tudo a cada tick.
     if (S.page === 'hoje' && was && Math.abs(data.activeMs - was.activeMs) > 50000) load(true);

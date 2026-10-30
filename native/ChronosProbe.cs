@@ -23,6 +23,17 @@ static class Probe
     [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr hWnd, EnumWindowsProc cb, IntPtr lp);
     [DllImport("user32.dll")] static extern bool EnumWindows(EnumWindowsProc cb, IntPtr lp);
     [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hWnd);
+
+    // Jogo com anti-cheat recusa a leitura do processo; estas duas aqui
+    // precisam de permissao minima e ainda devolvem o caminho do executavel.
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern IntPtr OpenProcess(int acesso, bool herdar, int pid);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool CloseHandle(IntPtr handle);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool QueryFullProcessImageName(IntPtr processo, int flags, StringBuilder caminho, ref int tamanho);
+
+    const int CONSULTA_LIMITADA = 0x1000; // PROCESS_QUERY_LIMITED_INFORMATION
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr hWnd, StringBuilder name, int count);
 
     delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
@@ -137,7 +148,26 @@ static class Probe
         if (len <= 0) return "";
         var sb = new StringBuilder(len + 2);
         GetWindowText(hwnd, sb, sb.Capacity);
-        return sb.ToString();
+        return SemInvisiveis(sb.ToString());
+    }
+
+    // Alguns jogos (THE FINALS, por exemplo) espalham caracteres invisiveis
+    // pelo titulo da janela de proposito. Sem tirar isso, cada leitura vira um
+    // titulo diferente e nada soma no relatorio.
+    static string SemInvisiveis(string texto)
+    {
+        if (string.IsNullOrEmpty(texto)) return "";
+        var limpo = new StringBuilder(texto.Length);
+        foreach (char c in texto)
+        {
+            // zero-width space/non-joiner/joiner, marcas de direcao, BOM,
+            // word joiner e hifen suave
+            if (c >= '​' && c <= '‏') continue;
+            if (c == '﻿' || c == '⁠' || c == '­') continue;
+            if (c >= '‪' && c <= '‮') continue;
+            limpo.Append(c);
+        }
+        return Regex.Replace(limpo.ToString(), @"\s{2,}", " ").Trim();
     }
 
     static uint RealUwpPid(IntPtr hwnd, uint hostPid)
@@ -162,6 +192,47 @@ static class Probe
         try { return Process.GetProcessById(pid).ProcessName; } catch { return "?"; }
     }
 
+    // Caminho do executavel mesmo quando o processo recusa inspecao (jogo com
+    // anti-cheat). MainModule falha nesses casos; isto aqui nao.
+    static string CaminhoDoProcesso(int pid)
+    {
+        IntPtr handle = OpenProcess(CONSULTA_LIMITADA, false, pid);
+        if (handle == IntPtr.Zero) return null;
+        try
+        {
+            var buffer = new StringBuilder(1024);
+            int tamanho = buffer.Capacity;
+            if (QueryFullProcessImageName(handle, 0, buffer, ref tamanho)) return buffer.ToString();
+        }
+        catch { }
+        finally { CloseHandle(handle); }
+        return null;
+    }
+
+    // Jogo de loja guarda o nome bonito na pasta: steamapps\common\THE FINALS.
+    // O executavel costuma ter nome interno ("Discovery.exe"), que nao diz nada.
+    static string NomeDePastaDeJogo(string caminho)
+    {
+        if (string.IsNullOrEmpty(caminho)) return null;
+        var padroes = new string[] {
+            @"\\steamapps\\common\\([^\\]+)\\",
+            @"\\Epic Games\\([^\\]+)\\",
+            @"\\GOG Games\\([^\\]+)\\",
+            @"\\Riot Games\\([^\\]+)\\",
+            @"\\Origin Games\\([^\\]+)\\"
+        };
+        foreach (var p in padroes)
+        {
+            var m = Regex.Match(caminho, p, RegexOptions.IgnoreCase);
+            if (m.Success)
+            {
+                string nome = m.Groups[1].Value.Trim();
+                if (nome.Length > 1 && !nome.Equals("bin", StringComparison.OrdinalIgnoreCase)) return nome;
+            }
+        }
+        return null;
+    }
+
     // Devolve [nome amigavel, caminho do executavel].
     static string[] AppInfo(int pid, string exe)
     {
@@ -169,10 +240,20 @@ static class Probe
         if (AppInfoCache.TryGetValue(pid, out cached)) return cached;
 
         string name = exe;
-        string path = null;
+        string path = CaminhoDoProcesso(pid);
         try
         {
-            path = Process.GetProcessById(pid).MainModule.FileName;
+            if (path == null) path = Process.GetProcessById(pid).MainModule.FileName;
+
+            string nomeDoJogo = NomeDePastaDeJogo(path);
+            if (nomeDoJogo != null)
+            {
+                var par = new string[] { nomeDoJogo, path };
+                if (AppInfoCache.Count > 400) AppInfoCache.Clear();
+                AppInfoCache[pid] = par;
+                return par;
+            }
+
             var info = FileVersionInfo.GetVersionInfo(path);
             string desc = (info.FileDescription ?? "").Trim();
             string prod = (info.ProductName ?? "").Trim();
