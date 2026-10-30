@@ -7,6 +7,26 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <!-- Abertura: a marca gira e assenta, o nome sobe. Sai sozinha em 1s. -->
+  <div class="abertura" id="abertura">
+    <div class="abertura-palco">
+      <div class="abertura-marca">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <defs>
+            <linearGradient id="marcaAbertura" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#169a50" />
+              <stop offset="0.55" stop-color="#55d396" />
+              <stop offset="1" stop-color="#35e0c8" />
+            </linearGradient>
+          </defs>
+          <rect width="24" height="24" rx="6.2" fill="#040605" />
+          <path d="M12 12 L21.2 12 A9.2 9.2 0 1 1 12 2.8 Z" fill="url(#marcaAbertura)" />
+        </svg>
+      </div>
+      <div class="abertura-nome">Chronos</div>
+    </div>
+  </div>
+
   <div class="app">
     <aside class="side">
       <div class="brand">

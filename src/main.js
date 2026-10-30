@@ -31,7 +31,7 @@ let probeRetry = null;
 let quitting = false;
 let systemPaused = false;
 let probeError = null;
-let liveCache = { at: 0, activeMs: 0, productiveMs: 0, idleMs: 0 };
+let liveCache = { at: 0, activeMs: 0, idleMs: 0 };
 
 /* ------------------------------------------------------------------ probe */
 
@@ -98,7 +98,7 @@ function todayTotals() {
   if (now - liveCache.at < 4000) return liveCache;
   const key = dateKey(now);
   const agg = store.aggregate(key, key);
-  liveCache = { at: now, activeMs: agg.activeMs, productiveMs: agg.productiveMs, idleMs: agg.idleMs };
+  liveCache = { at: now, activeMs: agg.activeMs, idleMs: agg.idleMs };
   return liveCache;
 }
 
@@ -107,9 +107,7 @@ function liveState() {
   return {
     current: tracker.snapshot(),
     activeMs: t.activeMs,
-    productiveMs: t.productiveMs,
     idleMs: t.idleMs,
-    focusGoalMin: store.settings.focusGoalMin,
     paused: systemPaused || !!store.settings.paused,
     systemPaused,
     error: probeError
@@ -492,7 +490,11 @@ async function screenshotRun(dir) {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   try {
     fs.mkdirSync(dir, { recursive: true });
-    await wait(2200);
+
+    // flagra da abertura, enquanto a marca ainda está girando
+    await wait(420);
+    fs.writeFileSync(path.join(dir, 'abertura.png'), (await win.webContents.capturePage()).toPNG());
+    await wait(1800);
     const run = (js) => win.webContents.executeJavaScript(js);
     const shot = async (name) => {
       // Janela atrás das outras não gera quadros novos: força o redesenho
@@ -521,7 +523,7 @@ async function screenshotRun(dir) {
       console.log('[shot] troca para ' + page + ': ' + (Date.now() - t0) + ' ms');
     };
 
-    for (const page of ['hoje', 'apps', 'sites', 'cats', 'hist', 'sug', 'set']) {
+    for (const page of ['hoje', 'apps', 'sites', 'hist', 'sug', 'set']) {
       await go(page);
       await shot(page);
     }
@@ -541,13 +543,6 @@ async function screenshotRun(dir) {
     await wait(500);
     await shot('hoje-fim');
 
-    await go('cats');
-    await run('document.querySelector("#view").scrollTop = 760');
-    await wait(500);
-    await shot('cats-meio');
-    await run('document.querySelector("#view").scrollTop = 99999');
-    await wait(500);
-    await shot('cats-fim');
 
     await go('apps');
     await run('document.querySelector(".row").click()');
@@ -595,9 +590,7 @@ function registerIpc() {
       try { win.setTitleBarOverlay(overlayColors()); } catch (err) { /* ignora */ }
     }
     if (intervalChanged) restartProbe();
-    if ('categories' in patch || 'atribuicoes' in patch || 'minSegundos' in patch) {
-      liveCache.at = 0;
-    }
+    if ('minSegundos' in patch) liveCache.at = 0;
     return store.settings;
   });
 

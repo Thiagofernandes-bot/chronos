@@ -8,7 +8,6 @@ const PAGES = [
   { id: 'hoje', label: 'Hoje' },
   { id: 'apps', label: 'Aplicativos' },
   { id: 'sites', label: 'Navegador' },
-  { id: 'cats', label: 'Categorias' },
   { id: 'hist', label: 'Histórico' },
   { id: 'sug', label: 'Sugestões' },
   { id: 'set', label: 'Ajustes' }
@@ -18,7 +17,6 @@ const ICONS = {
   hoje: '<circle cx="10" cy="10" r="7"/><path d="M10 6.2V10l2.7 1.7"/>',
   apps: '<rect x="3" y="3" width="6" height="6" rx="1.6"/><rect x="11" y="3" width="6" height="6" rx="1.6"/><rect x="3" y="11" width="6" height="6" rx="1.6"/><rect x="11" y="11" width="6" height="6" rx="1.6"/>',
   sites: '<circle cx="10" cy="10" r="7"/><path d="M3 10h14M10 3c1.9 2 2.9 4.4 2.9 7s-1 5-2.9 7c-1.9-2-2.9-4.4-2.9-7S8.1 5 10 3z"/>',
-  cats: '<path d="M10 10V3a7 7 0 1 1-7 7h7z"/><path d="M12.4 3.7A7 7 0 0 1 16.3 7.6"/>',
   hist: '<path d="M3 17h14"/><rect x="4.5" y="9" width="3" height="5" rx="1"/><rect x="9" y="5" width="3" height="9" rx="1"/><rect x="13.5" y="11" width="3" height="3" rx="1"/>',
   sug: '<path d="M16.5 11.8c0 1.3-1.1 2.4-2.4 2.4H8.3L4.5 17v-2.8H5.9c-1.3 0-2.4-1.1-2.4-2.4V5.9c0-1.3 1.1-2.4 2.4-2.4h8.2c1.3 0 2.4 1.1 2.4 2.4z"/>',
   set: '<path d="M3 6h7M14 6h3M3 14h3M10 14h7"/><circle cx="12" cy="6" r="2"/><circle cx="8" cy="14" r="2"/>'
@@ -38,6 +36,8 @@ const S = {
   settings: null,
   live: null,
   update: null,
+  anterior: null,
+  ultimaPagina: null,
   open: {},
   confirmClear: false
 };
@@ -163,6 +163,20 @@ function dayLabel(key, long) {
   return date.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '') + ' ' + d;
 }
 
+function doKey(k) {
+  const [y, m, d] = String(k).split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+// Mesmo tamanho de período, imediatamente antes: é com ele que a tela Hoje
+// se compara.
+function periodoAnterior(r) {
+  const dias = r.days || 1;
+  const fim = new Date(doKey(r.from).getTime() - 864e5);
+  const ini = new Date(fim.getTime() - (dias - 1) * 864e5);
+  return { from: keyOf(ini), to: keyOf(fim) };
+}
+
 function currentRange() {
   const today = new Date();
   if (S.range === 'hoje') { const k = keyOf(today); return { from: k, to: k, single: true }; }
@@ -183,50 +197,27 @@ function rangeLabel() {
 
 /* ---------------------------------------------------------------- graficos */
 
-function donut(items, total, size) {
-  const r = size / 2 - 8;
-  const c = 2 * Math.PI * r;
-  let off = 0;
-  let parts = '';
-  for (const it of items) {
-    const frac = total ? it.ms / total : 0;
-    if (frac <= 0) continue;
-    const len = Math.max(c * frac - 1.5, 0.8);
-    parts += '<circle cx="' + size / 2 + '" cy="' + size / 2 + '" r="' + r + '" fill="none"'
-      + ' stroke="' + it.color + '" stroke-width="13" stroke-linecap="round"'
-      + ' stroke-dasharray="' + len.toFixed(2) + ' ' + (c - len).toFixed(2) + '"'
-      + ' stroke-dashoffset="' + (-off).toFixed(2) + '"></circle>';
-    off += c * frac;
-  }
-  if (!parts) {
-    parts = '<circle cx="' + size / 2 + '" cy="' + size / 2 + '" r="' + r
-      + '" fill="none" stroke="var(--line)" stroke-width="13"></circle>';
-  }
-  return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '"'
-    + ' style="transform:rotate(-90deg)">' + parts + '</svg>';
-}
-
-function stackedCol(byCat, total, max, catInfo) {
+function stackedCol(porApp, total, max, cores) {
   if (!total) return '<div class="empty"></div>';
-  const entries = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+  const entries = Object.entries(porApp).sort((a, b) => b[1] - a[1]);
   const hFrac = max ? total / max : 0;
   let html = '';
-  for (const [cat, ms] of entries) {
-    const info = catInfo[cat] || { color: '#6B7280' };
+  for (const [nome, ms] of entries) {
+    const cor = (cores && cores[nome]) || '#5E6B66';
     const h = (ms / total) * hFrac * 100;
-    html += '<div class="seg" style="height:' + h.toFixed(2) + '%;background:' + info.color + '"></div>';
+    html += '<div class="seg" style="height:' + h.toFixed(2) + '%;background:' + cor + '"></div>';
   }
   return html;
 }
 
-function hoursChart(hours, catInfo) {
+function hoursChart(hours, cores) {
   const max = Math.max.apply(null, hours.map((h) => h.total).concat([1]));
   let bars = '';
   for (const h of hours) {
     const tip = h.total
       ? pad(h.h) + 'h — ' + fmt(h.total)
       : pad(h.h) + 'h — sem registro';
-    bars += '<div class="h" data-tip="' + esc(tip) + '">' + stackedCol(h.byCat, h.total, max, catInfo) + '</div>';
+    bars += '<div class="h" data-tip="' + esc(tip) + '">' + stackedCol(h.porApp, h.total, max, cores) + '</div>';
   }
   let labels = '';
   for (let i = 0; i < 24; i++) labels += '<span>' + (i % 3 === 0 ? pad(i) : '') + '</span>';
@@ -281,10 +272,10 @@ function rankRows(items, kind) {
     const key = kind + ':' + name;
     const open = !!S.open[key];
     const list = kind === 'site' ? it.tabs : it.top;
-    const catName = (S.stats.catInfo[it.cat] || {}).name || '';
     const sub = it.sub ? it.sub
-      : kind === 'site' ? (catName + ' · ' + list.length + (list.length === 1 ? ' aba' : ' abas'))
-        : (it.browser ? 'navegador · ' + list.length + ' sites' : catName);
+      : kind === 'site' ? (list.length + (list.length === 1 ? ' aba' : ' abas'))
+        : (it.browser ? 'navegador · ' + list.length + ' sites'
+          : (list.length + (list.length === 1 ? ' janela' : ' janelas')));
     html += '<button class="row' + (open ? ' open' : '') + '" data-expand="' + esc(key) + '">'
       + tile(name, it.color, it.exe, it.dom || (kind === 'site' ? name : null))
       + '<div style="min-width:0">'
@@ -330,9 +321,6 @@ function emptyState(msg) {
 function viewHoje() {
   const st = S.stats;
   const r = currentRange();
-  const goalMs = (S.settings.focusGoalMin || 300) * 60000;
-  const days = r.single ? 1 : r.days;
-  const frac = goalMs ? (st.productiveMs / days) / goalMs : 0;
   const first = st.timeline.length ? st.timeline[0].s : null;
   const lastSeen = st.timeline.length ? st.timeline[st.timeline.length - 1].e : null;
 
@@ -347,10 +335,9 @@ function viewHoje() {
   // Abertura: o número manda na tela, a frase explica, os detalhes ficam
   // numa linha de apoio — sem caixa nenhuma em volta.
   html += '<div class="lead">'
-    + '<div class="lead-num num">' + fmtBig(st.activeMs) + '</div>'
+    + '<div class="lead-num num" data-ms="' + st.activeMs + '">' + fmtBig(st.activeMs) + '</div>'
     + summaryLine(st, r)
     + '<div class="facts">'
-    + fact('Produtivo', fmt(st.productiveMs))
     + fact('Ausente', fmt(st.idleMs))
     + fact('Aplicativos', String(st.apps.length))
     + fact('Sites', String(st.sites.length))
@@ -368,15 +355,10 @@ function viewHoje() {
 
   html += '<div class="sec"><div class="grid g-hero">'
     + '<div><div class="sec-h" style="margin-top:0"><h2>Por hora</h2>'
-    + '<span>a cor mostra a categoria</span></div>'
-    + hoursChart(st.hours, st.catInfo) + '</div>'
-    + '<div><div class="sec-h" style="margin-top:0"><h2>Meta de foco</h2>'
-    + '<span>' + (r.single ? 'hoje' : 'média por dia') + '</span></div>'
-    + '<div class="goal-bar"><i style="width:' + (Math.min(frac, 1) * 100).toFixed(1) + '%"></i></div>'
-    + '<div class="goal-txt"><b class="num">' + pct(Math.min(frac, 1)) + '</b>'
-    + '<span class="num">' + fmt(st.productiveMs / days) + ' de ' + fmt(goalMs) + '</span></div>'
-    + '<p class="cap">' + esc(goalNote(st.productiveMs / days, goalMs)) + '</p>'
-    + '</div></div></div>';
+    + '<span>cada cor é um app ou site</span></div>'
+    + hoursChart(st.hours, st.cores) + '</div>'
+    + comparacao(st, r)
+    + '</div></div>';
 
   html += '<div class="sec"><div class="sec-h"><h2>Mais usados</h2>'
     + '<span>apps e sites na mesma lista</span></div>'
@@ -398,30 +380,59 @@ function fact(label, value) {
   return '<div><span>' + esc(label) + '</span><b class="num">' + esc(value) + '</b></div>';
 }
 
-// Uma faixa só com a divisão do tempo: lê mais rápido que um donut e não
-// precisa de legenda em caixa separada.
+// Uma faixa só com a divisão do tempo entre os apps e sites do período.
 function spectrum(st) {
-  if (!st.categories.length) return '';
-  const barras = st.categories.map((c) =>
-    '<i style="width:' + Math.max(c.pct * 100, 0.6).toFixed(2) + '%;background:' + c.color + '"'
-    + ' data-tip="' + esc(c.name) + '" data-tip2="' + esc(fmt(c.ms) + ' · ' + pct(c.pct)) + '"></i>').join('');
-  const legenda = st.categories.slice(0, 7).map((c) =>
-    '<span><em style="background:' + c.color + '"></em>' + esc(c.name)
-    + ' <b class="num">' + fmt(c.ms) + '</b></span>').join('');
+  const itens = mixTop(st);
+  if (!itens.length) return '';
+  const total = itens.reduce((soma, i) => soma + i.ms, 0);
+  if (!total) return '';
+
+  const barras = itens.map((i) =>
+    '<i style="width:' + Math.max((i.ms / total) * 100, 0.6).toFixed(2) + '%;background:' + i.color + '"'
+    + ' data-tip="' + esc(i.app) + '" data-tip2="' + esc(fmt(i.ms) + ' · ' + pct(i.ms / total)) + '"></i>').join('');
+  const legenda = itens.slice(0, 7).map((i) =>
+    '<span><em style="background:' + i.color + '"></em>' + esc(i.app)
+    + ' <b class="num">' + fmt(i.ms) + '</b></span>').join('');
+
   return '<div class="spec"><div class="spec-bar">' + barras + '</div>'
     + '<div class="spec-legend">' + legenda + '</div></div>';
 }
 
+// No lugar da meta de foco: comparação com o período anterior, que não exige
+// você definir nada para significar alguma coisa.
+function comparacao(st, r) {
+  const antes = S.anterior;
+  const titulo = r.single ? (S.range === 'ontem' ? 'Comparado a anteontem' : 'Comparado a ontem')
+    : 'Comparado ao período anterior';
+
+  let corpo;
+  if (!antes || !antes.activeMs) {
+    corpo = '<div class="goal-txt"><b class="num">—</b>'
+      + '<span>sem registro para comparar</span></div>';
+  } else {
+    const dif = st.activeMs - antes.activeMs;
+    const sinal = dif >= 0 ? '+' : '−';
+    const prop = Math.min(Math.abs(st.activeMs) / Math.max(antes.activeMs, 1), 1.6) / 1.6;
+    corpo = '<div class="goal-bar"><i style="width:' + (prop * 100).toFixed(1) + '%"></i></div>'
+      + '<div class="goal-txt"><b class="num">' + sinal + fmt(Math.abs(dif)) + '</b>'
+      + '<span class="num">' + fmt(antes.activeMs) + ' antes</span></div>'
+      + '<p class="cap">' + (dif >= 0 ? 'mais' : 'menos') + ' tempo de tela que no período anterior</p>';
+  }
+
+  return '<div><div class="sec-h" style="margin-top:0"><h2>' + titulo + '</h2></div>' + corpo + '</div>';
+}
+
 // Uma frase em portugues claro explicando o numero grande logo acima.
 function summaryLine(st, r) {
-  const top = st.categories[0];
-  const topApp = mixTop(st)[0];
+  const itens = mixTop(st);
+  const topApp = itens[0];
+  const segundo = itens[1];
   const quando = r.single ? (S.range === 'ontem' ? 'ontem' : 'hoje') : 'neste período';
   let txt = 'Você usou o computador por <b>' + fmt(st.activeMs) + '</b> ' + quando + '.';
-  if (top) {
-    txt += ' A maior parte foi em <b style="color:' + top.color + '">' + esc(top.name.toLowerCase())
-      + '</b> (' + pct(top.pct) + ')';
-    txt += topApp ? ', e o que mais tomou tempo foi <b>' + esc(topApp.app) + '</b> com ' + fmt(topApp.ms) + '.' : '.';
+  if (topApp) {
+    txt += ' O que mais tomou tempo foi <b style="color:' + topApp.color + '">' + esc(topApp.app)
+      + '</b>, com ' + fmt(topApp.ms);
+    txt += segundo ? ', seguido de <b>' + esc(segundo.app) + '</b> com ' + fmt(segundo.ms) + '.' : '.';
   }
   return '<p class="lead-txt">' + txt + '</p>';
 }
@@ -460,130 +471,13 @@ function viewSites() {
   const totalBrowser = st.sites.reduce((a, b) => a + b.ms, 0);
   const tabs = st.sites.reduce((a, b) => a + b.tabs.length, 0);
   return '<div class="lead">'
-    + '<div class="lead-num num">' + fmtBig(totalBrowser) + '</div>'
+    + '<div class="lead-num num" data-ms="' + totalBrowser + '">' + fmtBig(totalBrowser) + '</div>'
     + '<p class="lead-txt">Tempo dentro do navegador, repartido entre <b>' + st.sites.length
     + ' sites</b> e <b>' + tabs + ' abas</b> diferentes.</p>'
     + '</div>'
     + '<div class="sec"><div class="sec-h"><h2>Tempo por site</h2>'
     + '<span>clique para ver as abas e os canais</span></div>'
     + rankRows(st.sites, 'site') + notaMidia(st) + notaOcultos(st) + '</div>';
-}
-
-function viewCats() {
-  const st = S.stats;
-  const cats = S.settings.categories;
-  const prod = new Set(S.settings.productive || []);
-
-  const nomesProd = Array.from(prod).map((id) => (st.catInfo[id] || { name: id }).name);
-
-  let html = '<div class="lead">'
-    + '<div class="lead-num num">' + pct(st.activeMs ? st.productiveMs / st.activeMs : 0) + '<i>produtivo</i></div>'
-    + '<p class="lead-txt">De <b>' + fmt(st.activeMs) + '</b> ativas, <b>' + fmt(st.productiveMs)
-    + '</b> em ' + esc(nomesProd.join(' e ').toLowerCase() || '—') + '.'
-    + ' O que conta como produtivo é você quem define, aqui embaixo.</p></div>';
-
-  html += '<div class="sec"><div class="sec-h"><h2>Distribuição</h2>'
-    + '<span>' + esc(rangeLabel()) + '</span></div>'
-    + '<div class="donut-wrap"><div class="donut">' + donut(st.categories, st.activeMs, 170)
-    + '<div class="donut-mid"><b class="num">' + fmt(st.activeMs) + '</b><span>ativo</span></div></div>'
-    + '<div class="legend">'
-    + (st.categories.length ? st.categories.map((c) => '<div><i style="background:' + c.color + '"></i>'
-      + '<span>' + esc(c.name) + '</span><b class="num">' + fmt(c.ms) + ' · ' + pct(c.pct) + '</b></div>').join('')
-      : '<span style="color:var(--txt-3)">Sem dados no período.</span>')
-    + '</div></div></div>';
-
-  html += listaParaClassificar(st, 'app', 'Seus aplicativos',
-    'cada um conta na categoria que você escolher aqui');
-  html += listaParaClassificar(st, 'site', 'Sites',
-    'o que você faz dentro do navegador conta por aqui, não como “Chrome”');
-
-  html += '<div class="sec"><div class="sec-h"><h2>Categorias</h2>'
-    + '<span>crie as suas e marque o que conta como produtivo</span></div>'
-    + '<div class="cat-edit">';
-
-  for (const c of cats) {
-    html += '<div class="cat-box" data-cat="' + esc(c.id) + '">'
-      + '<div class="cat-top">'
-      + '<input type="color" value="' + esc(c.color) + '" data-cat-color="' + esc(c.id) + '" />'
-      + '<input type="text" value="' + esc(c.name) + '" data-cat-name="' + esc(c.id) + '" />'
-      + '<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--txt-2)">'
-      + '<span class="sw' + (prod.has(c.id) ? ' on' : '') + '" data-cat-prod="' + esc(c.id) + '"></span> produtivo</label>'
-      + '<button class="btn danger" data-cat-del="' + esc(c.id) + '">Remover</button>'
-      + '</div>'
-      + '<details class="regras-auto"><summary>regras automáticas</summary>'
-      + '<div class="chip-lab">Sites</div>' + chips(c.id, 'domains', c.domains || [])
-      + '<div class="chip-lab">Aplicativos</div>' + chips(c.id, 'apps', c.apps || [])
-      + '<div class="chip-lab">Títulos de janela</div>' + chips(c.id, 'titles', c.titles || [])
-      + '</details>'
-      + '</div>';
-  }
-
-  html += '</div>'
-    + '<div style="display:flex;gap:8px;margin-top:14px">'
-    + '<button class="btn primary" data-cat-new>+ Nova categoria</button>'
-    + '<button class="btn" data-cat-reset>Voltar ao padrão</button>'
-    + '</div></div>';
-  return html;
-}
-
-// Quanto falta (ou sobra) para a meta do dia, em português de gente.
-function goalNote(feitoMs, metaMs) {
-  const falta = metaMs - feitoMs;
-  if (falta <= 0) return 'meta batida — ' + fmt(-falta) + ' além';
-  return 'faltam ' + fmt(falta);
-}
-
-// A lista que substitui o preenchimento de regras na mão: o que você usou,
-// com ícone e tempo, e um seletor de categoria em cada linha.
-function listaParaClassificar(st, tipo, titulo, explicacao) {
-  const itens = (st.itens || []).filter((i) => i.tipo === tipo);
-  if (!itens.length) return '';
-
-  // Quem ainda não tem categoria sobe: é o que pede decisão.
-  const ordenados = itens.slice().sort((a, b) => {
-    const semA = a.cat === 'outros' ? 0 : 1;
-    const semB = b.cat === 'outros' ? 0 : 1;
-    return semA - semB || b.ms - a.ms;
-  });
-
-  const cats = S.settings.categories;
-  const semCategoria = ordenados.filter((i) => i.cat === 'outros').length;
-
-  let html = '<div class="sec"><div class="sec-h"><h2>' + esc(titulo) + '</h2>'
-    + '<span>' + (semCategoria
-      ? semCategoria + (semCategoria === 1 ? ' esperando você' : ' esperando você')
-      : esc(explicacao)) + '</span></div><div class="class-lista">';
-
-  for (const it of ordenados) {
-    const info = st.catInfo[it.cat] || { name: 'Sem categoria', color: '#5E6B66' };
-    const opcoes = ['<option value="">Automático</option>']
-      .concat(cats.map((c) => '<option value="' + esc(c.id) + '"'
-        + (it.explicito && it.cat === c.id ? ' selected' : '') + '>' + esc(c.name) + '</option>'))
-      .concat(['<option value="outros"' + (it.explicito && it.cat === 'outros' ? ' selected' : '')
-        + '>Sem categoria</option>']).join('');
-
-    html += '<div class="class-item' + (it.cat === 'outros' ? ' sem' : '') + '">'
-      + tile(it.nome, info.color, it.exe, it.dom)
-      + '<div style="min-width:0">'
-      + '<div class="row-name">' + esc(it.nome) + '</div>'
-      + '<div class="row-sub"><span class="num">' + fmt(it.ms) + '</span>'
-      + (it.explicito ? '' : ' · <em>' + esc(info.name.toLowerCase()) + ' por padrão</em>')
-      + '</div></div>'
-      + '<select data-atrib="' + esc(it.chave) + '">' + opcoes + '</select>'
-      + '</div>';
-  }
-  return html + '</div></div>';
-}
-
-function chips(catId, field, list) {
-  let html = '<div class="chips">';
-  for (const v of list) {
-    html += '<span class="chip">' + esc(v)
-      + '<button data-chip-del="' + esc(catId) + '|' + field + '|' + esc(v) + '">×</button></span>';
-  }
-  html += '<input type="text" class="chip-add" placeholder="+ adicionar"'
-    + ' data-chip-add="' + esc(catId) + '|' + field + '" style="width:120px" />';
-  return html + '</div>';
 }
 
 function viewHist() {
@@ -598,12 +492,12 @@ function viewHist() {
   let labels = '';
   for (const d of days) {
     bars += '<div class="d" data-tip="' + esc(dayLabel(d.date, true)) + '" data-tip2="' + esc(fmt(d.ms)) + '">'
-      + stackedCol(d.byCat, d.ms, max, st.catInfo) + '</div>';
+      + stackedCol(d.porApp, d.ms, max, st.cores) + '</div>';
     labels += '<span>' + esc(days.length > 14 ? d.date.slice(8) : dayLabel(d.date)) + '</span>';
   }
 
   return '<div class="lead">'
-    + '<div class="lead-num num">' + fmtBig(st.activeMs) + '</div>'
+    + '<div class="lead-num num" data-ms="' + st.activeMs + '">' + fmtBig(st.activeMs) + '</div>'
     + '<p class="lead-txt">Total dos últimos 30 dias, com média de <b>' + fmt(avg)
     + '</b> por dia usado. O dia mais cheio foi <b>'
     + esc(best && best.ms ? dayLabel(best.date, true) : '—') + '</b>, com ' + fmt(best ? best.ms : 0) + '.</p>'
@@ -665,10 +559,6 @@ function viewSet() {
     + '<select data-set="minSegundos">' + [0, 10, 30, 60, 180].map((v) =>
       opt(v, v === 0 ? 'mostrar tudo' : (v < 60 ? v + ' s' : (v / 60) + ' min'), s.minSegundos)).join('')
     + '</select></div>'
-    + '<div class="set-row"><div><p>Meta diária de foco</p><small>usada na barra da tela Hoje</small></div>'
-    + '<div style="display:flex;align-items:center;gap:8px">'
-    + '<input type="number" min="30" max="900" step="30" value="' + s.focusGoalMin + '" data-set="focusGoalMin" style="min-width:86px;width:86px" />'
-    + '<span style="font-size:12px;color:var(--txt-3)">min</span></div></div>'
     + '</div></div>'
 
     + '<div class="card"><div class="card-h"><h2>Aplicativo</h2></div><div class="set">'
@@ -757,13 +647,39 @@ function renderNow() {
     + '<button class="mini" data-act="pause">' + (paused ? 'Retomar' : 'Pausar') + '</button></div>';
 }
 
+// Os números grandes sobem do zero: dá a sensação de contagem acontecendo,
+// que é literalmente o que o app faz.
+function animaNumero(el) {
+  const alvo = Number(el.dataset.ms || 0);
+  if (!alvo || menosMovimento()) { el.innerHTML = fmtBig(alvo); return; }
+  const dur = 650;
+  const inicio = performance.now();
+  const passo = (agora) => {
+    const p = Math.min((agora - inicio) / dur, 1);
+    const suave = 1 - Math.pow(1 - p, 3);
+    el.innerHTML = fmtBig(alvo * suave);
+    if (p < 1) requestAnimationFrame(passo);
+  };
+  requestAnimationFrame(passo);
+}
+
+function menosMovimento() {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
 function renderView() {
   if (!S.stats || !S.settings) return;
   const map = {
     hoje: viewHoje, apps: viewApps, sites: viewSites,
-    cats: viewCats, hist: viewHist, sug: viewSug, set: viewSet
+    hist: viewHist, sug: viewSug, set: viewSet
   };
-  $('#view').innerHTML = updateBanner() + map[S.page]();
+  // A entrada só toca quando a tela muda — não a cada atualização de dados.
+  const alvo = $('#view');
+  const mudou = S.ultimaPagina !== S.page;
+  S.ultimaPagina = S.page;
+  alvo.className = 'scroll' + (mudou && !menosMovimento() ? ' entra' : '');
+  alvo.innerHTML = updateBanner() + map[S.page]();
+  for (const n of alvo.querySelectorAll('.lead-num[data-ms]')) animaNumero(n);
 }
 
 function render() {
@@ -788,6 +704,16 @@ async function load(keepScroll) {
   ensureSiteIcons(st.sites.map((s) => s.dom)).then((novos) => {
     if (novos && S.stats === st) renderView();
   });
+
+  // A comparação com o período anterior chega depois, sem segurar a tela.
+  if (S.page === 'hoje') {
+    const ant = periodoAnterior(r);
+    api.stats(ant.from, ant.to).then((dados) => {
+      if (S.stats !== st) return;
+      S.anterior = dados;
+      renderView();
+    }).catch(() => { /* sem comparação, a seção avisa */ });
+  }
 }
 
 function toast(msg) {
@@ -799,15 +725,6 @@ function toast(msg) {
 }
 
 /* ---------------------------------------------------------------- eventos */
-
-function catById(id) {
-  return S.settings.categories.find((c) => c.id === id);
-}
-
-async function saveCats() {
-  S.settings = await api.setSettings({ categories: S.settings.categories });
-  await load(true);
-}
 
 document.addEventListener('click', async (ev) => {
   const t = ev.target;
@@ -835,49 +752,6 @@ document.addEventListener('click', async (ev) => {
     if (key === 'siteIcons') { SITE_ICON_CACHE = {}; await load(true); return; }
     S.live = await api.live();
     render();
-    return;
-  }
-
-  const prod = close('[data-cat-prod]');
-  if (prod) {
-    const id = prod.dataset.catProd;
-    const list = new Set(S.settings.productive || []);
-    if (list.has(id)) list.delete(id); else list.add(id);
-    S.settings = await api.setSettings({ productive: Array.from(list) });
-    await load(true);
-    return;
-  }
-
-  const del = close('[data-chip-del]');
-  if (del) {
-    const [id, field, value] = del.dataset.chipDel.split('|');
-    const cat = catById(id);
-    if (cat) cat[field] = (cat[field] || []).filter((v) => v !== value);
-    await saveCats();
-    return;
-  }
-
-  const catDel = close('[data-cat-del]');
-  if (catDel) {
-    const id = catDel.dataset.catDel;
-    S.settings.categories = S.settings.categories.filter((c) => c.id !== id);
-    await saveCats();
-    toast('Categoria removida');
-    return;
-  }
-
-  if (close('[data-cat-new]')) {
-    const id = 'cat' + Date.now().toString(36);
-    S.settings.categories.push({ id, name: 'Nova categoria', color: '#55D396', apps: [], domains: [], titles: [] });
-    await saveCats();
-    return;
-  }
-
-  if (close('[data-cat-reset]')) {
-    S.settings = await api.setSettings({ categories: [] });
-    S.settings = await api.getSettings();
-    await load(true);
-    toast('Regras voltaram ao padrão');
     return;
   }
 
@@ -949,38 +823,6 @@ document.addEventListener('change', async (ev) => {
     return;
   }
 
-  if (t.dataset.atrib) {
-    const atrib = Object.assign({}, S.settings.atribuicoes || {});
-    if (t.value) atrib[t.dataset.atrib] = t.value;
-    else delete atrib[t.dataset.atrib];
-    S.settings = await api.setSettings({ atribuicoes: atrib });
-    await load(true);
-    return;
-  }
-
-  if (t.dataset.catColor || t.dataset.catName) {
-    const id = t.dataset.catColor || t.dataset.catName;
-    const cat = catById(id);
-    if (!cat) return;
-    if (t.dataset.catColor) cat.color = t.value;
-    else cat.name = t.value.trim() || cat.name;
-    await saveCats();
-  }
-});
-
-document.addEventListener('keydown', async (ev) => {
-  const t = ev.target;
-  if (ev.key === 'Enter' && t.dataset && t.dataset.chipAdd) {
-    const [id, field] = t.dataset.chipAdd.split('|');
-    const value = t.value.trim().toLowerCase();
-    if (!value) return;
-    const cat = catById(id);
-    if (!cat) return;
-    cat[field] = cat[field] || [];
-    if (!cat[field].includes(value)) cat[field].push(value);
-    t.value = '';
-    await saveCats();
-  }
 });
 
 /* tooltip */
@@ -1003,6 +845,10 @@ document.addEventListener('mousemove', (ev) => {
 /* ------------------------------------------------------------------ boot */
 
 (async function init() {
+  // tira a abertura do caminho depois que ela sai de cena
+  const abertura = document.getElementById("abertura");
+  if (abertura) setTimeout(() => abertura.remove(), 1400);
+
   S.settings = await api.getSettings();
   document.documentElement.dataset.theme = S.settings.theme === 'light' ? 'light' : 'dark';
   S.live = await api.live();

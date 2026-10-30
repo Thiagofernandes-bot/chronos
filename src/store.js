@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { DEFAULT_CATEGORIES, OTHER, LEGACY_COLORS, classify, categoryMap, chaveDoItem } = require('./categories');
+const { corDe, NEUTRA } = require('./cores');
 const { ehRuido, nomeApp, tituloLimpo } = require('./ruido');
 const { duracao, subtrair, juntar } = require('./intervalos');
 
@@ -15,11 +15,7 @@ const DEFAULT_SETTINGS = {
   closeToTray: true,
   theme: 'dark',
   minSegundos: 30,         // esconde do relatorio o que somou menos que isso
-  atribuicoes: {},         // app/site -> categoria escolhida pelo usuario
   siteIcons: false,        // buscar favicon dos sites (unico acesso a internet)
-  focusGoalMin: 300,       // meta diaria de tempo produtivo, em minutos
-  productive: ['trabalho', 'estudo'],
-  categories: DEFAULT_CATEGORIES,
   bounds: null
 };
 
@@ -88,17 +84,9 @@ class Store {
     try {
       const raw = JSON.parse(fs.readFileSync(this.settingsPath, 'utf8'));
       const merged = Object.assign({}, DEFAULT_SETTINGS, raw);
-      if (!Array.isArray(merged.categories) || !merged.categories.length) {
-        merged.categories = DEFAULT_CATEGORIES;
-      }
-      // Categoria ainda com a cor antiga de fábrica passa para a nova paleta;
-      // cor escolhida pelo usuário fica como está.
-      for (const c of merged.categories) {
-        const legacy = LEGACY_COLORS[c.id];
-        if (legacy && String(c.color).toUpperCase() === legacy) {
-          const novo = DEFAULT_CATEGORIES.find((d) => d.id === c.id);
-          if (novo) { c.color = novo.color; this.migrated = true; }
-        }
+      // Restos da versão com categorias: saem na primeira leitura.
+      for (const velho of ['categories', 'atribuicoes', 'productive', 'focusGoalMin']) {
+        if (velho in merged) { delete merged[velho]; this.migrated = true; }
       }
       return merged;
     } catch (e) {
@@ -108,10 +96,6 @@ class Store {
 
   saveSettings(patch) {
     if (patch) Object.assign(this.settings, patch);
-    // Lista de categorias vazia significa "voltar ao padrao".
-    if (!Array.isArray(this.settings.categories) || !this.settings.categories.length) {
-      this.settings.categories = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
-    }
     const tmp = this.settingsPath + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(this.settings, null, 2), 'utf8');
     fs.renameSync(tmp, this.settingsPath);
@@ -196,9 +180,6 @@ class Store {
   // ---------- agregacao ----------
 
   aggregate(fromKey, toKey) {
-    const cats = this.settings.categories;
-    const atrib = this.settings.atribuicoes || {};
-    const catInfo = categoryMap(cats);
     const segs = this.readRange(fromKey, toKey);
     const keys = rangeKeys(fromKey, toKey);
     const single = keys.length === 1;
@@ -211,13 +192,12 @@ class Store {
     const frentePorAlvo = new Map();
     const midiaPorAlvo = new Map();
     const midiaRotulos = new Map();
-    const byCat = new Map();
     const byApp = new Map();
     const bySite = new Map();
     const byDay = new Map();
     const hours = [];
-    for (let h = 0; h < 24; h++) hours.push({ h, total: 0, byCat: {} });
-    for (const k of keys) byDay.set(k, { date: k, ms: 0, byCat: {} });
+    for (let h = 0; h < 24; h++) hours.push({ h, total: 0, porApp: {} });
+    for (const k of keys) byDay.set(k, { date: k, ms: 0, porApp: {} });
 
     const bump = (obj, key, ms) => { obj[key] = (obj[key] || 0) + ms; };
 
@@ -251,12 +231,13 @@ class Store {
 
       const app = nomeApp(seg.app, seg.exe);
       const title = seg.browser ? (seg.title || '') : tituloLimpo(seg.title, app, seg.exe);
-      const cat = classify(seg, cats, atrib);
-      byCat.set(cat, (byCat.get(cat) || 0) + ms);
+      // Nos gráficos empilhados, a divisão é por app — no navegador, por site,
+      // que é o que de fato estava em uso.
+      const fatia = seg.dom || app;
 
       const dk = dateKey(seg.s);
       const day = byDay.get(dk);
-      if (day) { day.ms += ms; bump(day.byCat, cat, ms); }
+      if (day) { day.ms += ms; bump(day.porApp, fatia, ms); }
 
       // Espalha o segmento pelas horas que ele ocupa.
       let cur = seg.s;
@@ -266,7 +247,7 @@ class Store {
         const slice = Math.min(seg.e, hourEnd) - cur;
         const bucket = hours[d.getHours()];
         bucket.total += slice;
-        bump(bucket.byCat, cat, slice);
+        bump(bucket.porApp, fatia, slice);
         cur += slice;
       }
 
@@ -275,7 +256,7 @@ class Store {
       if (seg.dom) juntar(frentePorAlvo, 'site:' + seg.dom, seg.s, seg.e);
       let appAgg = byApp.get(appKey);
       if (!appAgg) {
-        appAgg = { app, exe: seg.exe, ms: 0, cat, browser: !!seg.browser, titles: new Map() };
+        appAgg = { app, exe: seg.exe, ms: 0, browser: !!seg.browser, titles: new Map() };
         byApp.set(appKey, appAgg);
       }
       appAgg.ms += ms;
@@ -286,7 +267,7 @@ class Store {
       if (seg.dom) {
         let site = bySite.get(seg.dom);
         if (!site) {
-          site = { dom: seg.dom, ms: 0, cat, tabs: new Map() };
+          site = { dom: seg.dom, ms: 0, tabs: new Map() };
           bySite.set(seg.dom, site);
         }
         site.ms += ms;
@@ -307,12 +288,10 @@ class Store {
 
       if (alvo.indexOf('site:') === 0) {
         const dom = alvo.slice(5);
-        const cat = classify({ dom }, cats, atrib);
         let site = bySite.get(dom);
-        if (!site) { site = { dom, ms: 0, cat, tabs: new Map() }; bySite.set(dom, site); }
+        if (!site) { site = { dom, ms: 0, tabs: new Map() }; bySite.set(dom, site); }
         site.ms += extra;
         for (const [t, tms] of rotulos.titulos) site.tabs.set(t, (site.tabs.get(t) || 0) + tms);
-        byCat.set(cat, (byCat.get(cat) || 0) + extra);
       } else {
         const nome = alvo.slice(4);
         let chave = null;
@@ -321,15 +300,11 @@ class Store {
         }
         if (!chave) {
           chave = nome + '\u0001';
-          byApp.set(chave, {
-            app: nome, exe: null, ms: 0, browser: false, titles: new Map(),
-            cat: classify({ app: nome, exe: nome }, cats, atrib)
-          });
+          byApp.set(chave, { app: nome, exe: null, ms: 0, browser: false, titles: new Map() });
         }
         const alvoApp = byApp.get(chave);
         alvoApp.ms += extra;
         for (const [t, tms] of rotulos.titulos) alvoApp.titles.set(t, (alvoApp.titles.get(t) || 0) + tms);
-        byCat.set(alvoApp.cat, (byCat.get(alvoApp.cat) || 0) + extra);
       }
     }
 
@@ -344,33 +319,18 @@ class Store {
       .sort((a, b) => b.ms - a.ms)
       .slice(0, limit);
 
-    // A soma das categorias pode passar do tempo de tela (vídeo tocando
-    // enquanto você trabalha), então a fatia é sobre a própria soma.
-    let totalCat = 0;
-    for (const ms of byCat.values()) totalCat += ms;
-
-    const categories = Array.from(byCat.entries())
-      .map(([id, ms]) => {
-        const info = catInfo[id] || OTHER;
-        return { id, name: info.name, color: info.color, ms, pct: totalCat ? ms / totalCat : 0 };
-      })
-      .sort((a, b) => b.ms - a.ms);
-
     const appsTodos = Array.from(byApp.values())
       .map((a) => ({
-        app: a.app, exe: a.exe, ms: a.ms, cat: a.cat, browser: a.browser,
-        // O navegador em si nao tem categoria: o tempo dele se divide entre
-        // os sites, entao ele fica neutro na lista.
-        color: a.browser ? '#5E6B66' : (catInfo[a.cat] || OTHER).color,
+        app: a.app, exe: a.exe, ms: a.ms, browser: a.browser,
+        // O navegador fica neutro: o tempo dele se divide entre os sites.
+        color: a.browser ? NEUTRA : corDe(a.app),
         top: topList(a.titles, 14)
       }))
       .sort((a, b) => b.ms - a.ms);
 
     const sitesTodos = Array.from(bySite.values())
       .map((s) => ({
-        dom: s.dom, ms: s.ms, cat: s.cat,
-        color: (catInfo[s.cat] || OTHER).color,
-        tabs: topList(s.tabs, 14)
+        dom: s.dom, ms: s.ms, color: corDe(s.dom), tabs: topList(s.tabs, 14)
       }))
       .sort((a, b) => b.ms - a.ms);
 
@@ -381,25 +341,6 @@ class Store {
     // por isso somou ao tempo dos sites e apps.
     const midia = { totalMs: midiaMs, extraMs: midiaExtraMs };
 
-    // Lista para a tela de Categorias: cada app e cada site que apareceu de
-    // verdade, com a categoria atual e se ela veio de escolha do usuário.
-    const itens = [];
-    for (const a of apps) {
-      if (a.browser) continue; // o navegador em si não se classifica: quem vale é o site
-      const chave = 'app:' + String(a.exe || a.app).toLowerCase();
-      itens.push({
-        tipo: 'app', chave, nome: a.app, exe: a.exe,
-        ms: a.ms, cat: a.cat, explicito: !!atrib[chave]
-      });
-    }
-    for (const s of sites) {
-      const chave = 'site:' + s.dom;
-      itens.push({
-        tipo: 'site', chave, nome: s.dom, dom: s.dom,
-        ms: s.ms, cat: s.cat, explicito: !!atrib[chave]
-      });
-    }
-    itens.sort((a, b) => b.ms - a.ms);
     const ocultos = {
       minSegundos: Math.round(minMs / 1000),
       apps: appsTodos.length - apps.length,
@@ -407,33 +348,31 @@ class Store {
       ms: appsTodos.filter((a) => a.ms < minMs).reduce((t, a) => t + a.ms, 0)
     };
 
-    const productive = new Set(this.settings.productive || []);
-    let productiveMs = 0;
-    for (const c of categories) if (productive.has(c.id)) productiveMs += c.ms;
+    // Cor de cada fatia dos gráficos empilhados (app ou site).
+    const cores = {};
+    for (const a of appsTodos) cores[a.app] = a.color;
+    for (const s of sitesTodos) cores[s.dom] = s.color;
 
-    const result = {
+    return {
       from: fromKey, to: toKey, days: keys.length,
-      activeMs, idleMs, productiveMs,
-      categories, apps, sites, hours, ocultos, itens, midia,
+      activeMs, idleMs,
+      apps, sites, hours, ocultos, midia, cores,
       byDay: Array.from(byDay.values()),
-      catInfo,
-      timeline: single ? this.buildTimeline(segs, cats, catInfo, atrib) : []
+      timeline: single ? this.buildTimeline(segs) : []
     };
-    return result;
   }
 
   // Junta segmentos vizinhos do mesmo app numa faixa unica, para a linha do
   // tempo nao virar mil tracinhos de um pixel.
-  buildTimeline(segs, cats, catInfo, atrib) {
+  buildTimeline(segs) {
     const sorted = segs
-      .filter((s) => !s.idle && !ehRuido(s.exe, s.title))
+      .filter((s) => !s.idle && !s.midia && !ehRuido(s.exe, s.title))
       .sort((a, b) => a.s - b.s);
     const out = [];
     for (const seg of sorted) {
       const nome = nomeApp(seg.app, seg.exe);
-      const cat = classify(seg, cats, atrib);
       const last = out[out.length - 1];
-      if (last && last.app === nome && last.cat === cat && seg.s - last.e < 60000) {
+      if (last && last.app === nome && seg.s - last.e < 60000) {
         last.e = Math.max(last.e, seg.e);
         if (seg.dom && !last.dom) last.dom = seg.dom;
         continue;
@@ -443,8 +382,7 @@ class Store {
         app: nome,
         dom: seg.dom || null,
         title: seg.browser ? (seg.title || '') : tituloLimpo(seg.title, nome, seg.exe),
-        cat,
-        color: (catInfo[cat] || OTHER).color
+        color: corDe(seg.dom || nome)
       });
     }
     return out.length > 1200 ? out.slice(-1200) : out;
@@ -452,16 +390,14 @@ class Store {
 
   exportCsv(fromKey, toKey) {
     const segs = this.readRange(fromKey, toKey).sort((a, b) => a.s - b.s);
-    const cats = this.settings.categories;
-    const atrib = this.settings.atribuicoes || {};
-    const rows = ['inicio;fim;minutos;categoria;app;executavel;site;titulo'];
+    const rows = ['inicio;fim;minutos;tipo;app;executavel;site;titulo'];
     for (const s of segs) {
       const min = ((s.e - s.s) / 60000).toFixed(2).replace('.', ',');
-      const cat = s.idle ? 'ausente' : classify(s, cats, atrib);
+      const tipo = s.idle ? 'ausente' : (s.midia ? 'tocando' : 'tela');
       rows.push([
         new Date(s.s).toLocaleString('pt-BR'),
         new Date(s.e).toLocaleString('pt-BR'),
-        min, cat, s.idle ? 'Ausente' : nomeApp(s.app, s.exe), s.exe || '', s.dom || '',
+        min, tipo, s.idle ? 'Ausente' : nomeApp(s.app, s.exe), s.exe || '', s.dom || '',
         (s.title || '').replace(/[;\r\n]/g, ' ')
       ].join(';'));
     }
